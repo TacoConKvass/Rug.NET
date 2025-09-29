@@ -1,62 +1,77 @@
 const std = @import("std");
+const pe = @import("pe.zig");
+const Compile = @import("Compile.zig");
 
 const version = "0.0.1";
 
 pub fn main() !void {
     var args = std.process.args(); // exe args
-    
+
     const path = args.next() orelse ""; // exe path
     const command_text = args.next() orelse "";
-    
-    var context = ExecutionContext {
-        .path = path,
-        .command_text = command_text,
-        .command = std.meta.stringToEnum(Command, command_text) orelse .null
-    };
 
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    try switch (context.command) {
-        .init => stdout.print("{any}\n", .{ context.command }),
-        .version => context.show_version(stdout),
-        .help, .null => context.show_help(stdout),
+    var context = CMD{
+        .path = path,
+        .command_text = command_text,
+        .command = std.meta.stringToEnum(Command, command_text) orelse .null,
+        .project_file = undefined,
+        .stdout = stdout,
     };
 
+    try switch (context.command) {
+        .build => context.build(),
+        .init => {
+            try stdout.print("{any}\n", .{context.command});
+            try stdout.flush();
+        },
+        .version => context.show_version(),
+        .help, .null => context.show_help(),
+    };
 }
 
 const Command = enum {
+    build,
     help,
     init,
     null,
     version,
 };
 
-const ExecutionContext = struct {
+const CMD = struct {
     path: [:0]const u8,
     command_text: [:0]const u8,
     command: Command,
-    
-    pub fn show_help(self: *@This(), stdout: *std.Io.Writer) !void {
+    project_file: [:0]const u8,
+    stdout: *std.Io.Writer,
+
+    pub fn build(self: *@This()) !void {
+        try Compile.generate_assembly(self.stdout);
+    }
+
+    pub fn show_help(self: *@This()) !void {
         if (self.command == .null and !std.mem.eql(u8, self.command_text, "")) {
-            try stdout.print("Unknown command '{s}'\n", .{ self.command_text });
+            try self.stdout.print("Unknown command '{s}'\n", .{self.command_text});
         }
-        
-        try stdout.print(
+
+        try self.stdout.print(
             \\cig - A .NET compiler for Cig# 
             \\Usage: cig [command]
             \\
             \\Available commands:
+            \\    help - Display this message
             \\    init - Initializes a Cig# project
             \\    version - Show version and executable path
             \\
-        , .{ });
-        try stdout.flush(); // Don't forget to flush!
-    } 
+        , .{});
+        try self.stdout.flush(); // Don't forget to flush!
+    }
 
-    pub fn show_version(self: *@This(), stdout: *std.Io.Writer) !void {
-        try stdout.print("cig v{s} - {s}\n", .{ version, self.path });
-        try stdout.flush(); // Don't forget to flush!
+    pub fn show_version(self: *@This()) !void {
+        try self.stdout.print("cig v{s} - {s}\n", .{ version, self.path });
+        try self.stdout.flush(); // Don't forget to flush!
     }
 };

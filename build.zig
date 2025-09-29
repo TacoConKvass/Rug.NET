@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    // std.debug.print("Build graph: {any}", .{ b });
     // Get target and optimization level from the user
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
