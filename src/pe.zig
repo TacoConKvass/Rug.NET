@@ -45,8 +45,8 @@ pub const OptionalHeader = struct {
         pub const total_bytes: u64 = 28;
 
         magic: u16 = 0x010B,
-        lmajor: u8 = 6,
-        lminor: u8 = 0,
+        linker_major: u8 = 6,
+        linker_minor: u8 = 0,
         code_size: u32,
         initialized_data_size: u32,
         uninitialized_data_size: u32,
