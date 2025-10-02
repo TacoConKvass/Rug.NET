@@ -1,0 +1,9 @@
+const sys = @import("System");
+
+const A = struct {
+    integer_field: u32,
+};
+
+const main = fn() void {
+    sys.Console.WriteLine("I have been called from Cig#");
+};
