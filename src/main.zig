@@ -18,7 +18,7 @@ pub fn main() !void {
         .path = path,
         .command_text = command_text,
         .command = std.meta.stringToEnum(Command, command_text) orelse .null,
-        .project_file = undefined,
+        .args = &args,
         .stdout = stdout,
     };
 
@@ -45,11 +45,11 @@ const CMD = struct {
     path: [:0]const u8,
     command_text: [:0]const u8,
     command: Command,
-    project_file: [:0]const u8,
     stdout: *std.Io.Writer,
+    args: *std.process.ArgIterator,
 
     pub fn build(self: *@This()) !void {
-        try Compile.generate_assembly(self.stdout);
+        Compile.parse_file(self.stdout, self.args);
     }
 
     pub fn show_help(self: *@This()) !void {
