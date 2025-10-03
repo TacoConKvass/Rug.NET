@@ -1,6 +1,6 @@
 const std = @import("std");
 const pe = @import("pe.zig");
-const Compile = @import("Compile.zig");
+const Compiler = @import("Compiler.zig");
 
 const version = "0.0.1";
 
@@ -49,7 +49,7 @@ const CMD = struct {
     args: *std.process.ArgIterator,
 
     pub fn build(self: *@This()) !void {
-        Compile.execute(self.stdout, self.args);
+        Compiler.execute(self.stdout, self.args);
     }
 
     pub fn showHelp(self: *@This()) !void {
