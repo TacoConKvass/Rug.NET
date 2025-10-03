@@ -28,8 +28,8 @@ pub fn main() !void {
             try stdout.print("{any}\n", .{context.command});
             try stdout.flush();
         },
-        .version => context.show_version(),
-        .help, .null => context.show_help(),
+        .version => context.showVersion(),
+        .help, .null => context.showHelp(),
     };
 }
 
@@ -49,10 +49,10 @@ const CMD = struct {
     args: *std.process.ArgIterator,
 
     pub fn build(self: *@This()) !void {
-        Compile.parse_file(self.stdout, self.args);
+        Compile.execute(self.stdout, self.args);
     }
 
-    pub fn show_help(self: *@This()) !void {
+    pub fn showHelp(self: *@This()) !void {
         if (self.command == .null and !std.mem.eql(u8, self.command_text, "")) {
             try self.stdout.print("Unknown command '{s}'\n", .{self.command_text});
         }
@@ -70,7 +70,7 @@ const CMD = struct {
         try self.stdout.flush(); // Don't forget to flush!
     }
 
-    pub fn show_version(self: *@This()) !void {
+    pub fn showVersion(self: *@This()) !void {
         try self.stdout.print("cig v{s} - {s}\n", .{ version, self.path });
         try self.stdout.flush(); // Don't forget to flush!
     }

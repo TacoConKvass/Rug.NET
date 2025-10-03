@@ -3,7 +3,7 @@ const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const Parser = @import("Parser.zig");
 
-pub fn parse_file(stdout: *std.Io.Writer, args: *std.process.ArgIterator) void {
+pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) void {
     const arg_path = args.next();
     var file_path: []const u8 = &.{};
     if (arg_path != null and arg_path.?.len > 1) file_path = arg_path.?[0..arg_path.?.len];
@@ -17,11 +17,11 @@ pub fn parse_file(stdout: *std.Io.Writer, args: *std.process.ArgIterator) void {
     var file_reader = file.reader(&buffer);
     const read = file_reader.read(&buffer) catch @panic("Failed to read!");
     stdout.print("File size {any}\n{s}", .{ read, buffer[0..read] }) catch @panic("Failed to print");
-    Parser.parse(stdout, buffer[0..read]);
+    Parser.execute(stdout, buffer[0..read]);
     stdout.flush() catch @panic("Flush failed");
 }
 
-pub fn generate_assembly(writer: *std.Io.Writer) !void {
+pub fn generateAssembly(writer: *std.Io.Writer) !void {
     var ms_dos_header = ms_dos.Header{
         .pe_signature_offset = 0x00000080, // Immedaitely after DOS stub
     };

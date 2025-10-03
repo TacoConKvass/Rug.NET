@@ -71,7 +71,7 @@ pub const OptionalHeader = struct {
         }
     };
 
-    pub const NT_Specific = struct {
+    pub const NtSpecific = struct {
         pub const total_bytes: u64 = 68;
 
         image_base: u32,
@@ -96,7 +96,7 @@ pub const OptionalHeader = struct {
         loader_flags: u32 = 0,
         number_of_data_directories: u32 = 0x00000010,
 
-        pub fn all_bytes(self: *@This()) [NT_Specific.total_bytes]u8 {
+        pub fn allBytes(self: *@This()) [NtSpecific.total_bytes]u8 {
             // zig fmt: off
             return 
                 bytes(4, self.image_base) ++
@@ -136,10 +136,10 @@ pub const OptionalHeader = struct {
         // }
     };
 
-    pub const total_bytes: u64 = StandardFields.total_bytes + NT_Specific.total_bytes + DataDirectiories.total_bytes;
+    pub const total_bytes: u64 = StandardFields.total_bytes + NtSpecific.total_bytes + DataDirectiories.total_bytes;
 
     standard_fields: StandardFields,
-    nt_specific: NT_Specific,
+    nt_specific: NtSpecific,
     data_directories: DataDirectiories,
 
     // pub fn write(self: *@This(), stdout: std.Io.Writer) !void { }
