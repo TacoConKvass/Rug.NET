@@ -14,7 +14,7 @@ pub fn main() !void {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var context = CMD{
+    var cmd = CMD{
         .path = path,
         .command_text = command_text,
         .command = std.meta.stringToEnum(Command, command_text) orelse .null,
@@ -22,14 +22,14 @@ pub fn main() !void {
         .stdout = stdout,
     };
 
-    try switch (context.command) {
-        .build => context.build(),
+    try switch (cmd.command) {
+        .build => cmd.build(),
         .init => {
-            try stdout.print("{any}\n", .{context.command});
+            try stdout.print("{any}\n", .{cmd.command});
             try stdout.flush();
         },
-        .version => context.showVersion(),
-        .help, .null => context.showHelp(),
+        .version => cmd.showVersion(),
+        .help, .null => cmd.showHelp(),
     };
 }
 
