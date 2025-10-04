@@ -1,7 +1,7 @@
 const std = @import("std");
 const collections = @import("collections.zig");
 
-pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
+pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
     var last: u64 = 0;
     var line_number: u64 = 1;
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -16,54 +16,68 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
     var i: u64 = 1;
     while (i < buffer.len) {
         var char: SpecialChar = @enumFromInt(buffer[i - 1 .. i][0]);
-        char_check: switch (char) {
-            .space, .brace_close, .brace_open, .colon => {},
+        switch (char) {
+            .space, .colon => {},
             .new_line => {
                 line_number += 1;
             },
             .block_open => {
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = .{ .block = .open },
                 };
-                const index = state.push(token);
 
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
             },
             .block_close => {
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = .{ .block = .close },
                 };
-                const index = state.push(token);
 
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = parent.pop() catch 0;
-                continue :char_check .comma;
-            },
-            .end_statement, .comma => {
+                try pushAndUpdateParent(&state, token, &parent);
                 while (parent.count > 0) {
                     const index = parent.pop() catch unreachable;
                     const variant = state.ast[index.?].?.variant;
-                    if (variant == .block) {
-                        _ = try parent.push(index);
-                        break;
-                    }
-                    if (variant == .declaration) {
+                    if (variant == .block and variant.block == .open) {
+                        if (parent.count > 0) _ = try parent.pop();
                         break;
                     }
                 }
             },
-           .equals => {
+            .end_statement => {
+                while (parent.count > 0) {
+                    const index = parent.pop() catch unreachable;
+                    const variant = state.ast[index.?].?.variant;
+                    if (variant == .block and variant.block == .open) {
+                        _ = try parent.push(index);
+                        break;
+                    }
+                    if (variant == .declaration) {
+                        // _ = try parent.push(index);
+                        break;
+                    }
+                }
+            },
+            .comma => {
+                while (parent.count > 0) {
+                    const index = parent.pop() catch unreachable;
+                    const variant = state.ast[index.?].?.variant;
+                    if (variant == .block and variant.block == .open) {
+                        _ = try parent.push(index);
+                        break;
+                    }
+                    if (variant == .parameter_list and variant.parameter_list == .open) {
+                        // _ = try parent.push(index);
+                        break;
+                    }
+                }
+            },
+            .equals => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -79,16 +93,11 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                     },
                 }
 
-                const index = state.push(token);
-
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
             },
             .greater => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -103,16 +112,11 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                     },
                 }
 
-                const index = state.push(token);
-
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
             },
             .lesser => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -127,22 +131,32 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                     },
                 }
 
-                const index = state.push(token);
-
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
             },
-            .none, _ => {
-                var token = checkComplexToken(arena.allocator(), buffer, last, &i);
-                token.line_number = line_number;
-                const index = state.push(token);
+            .brace_open => {
+                const token = Token{
+                    .child_index_queue = .init(arena.allocator(), 2),
+                    .line_number = line_number,
+                    .variant = .{ .parameter_list = .open },
+                };
 
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
+            },
+            .brace_close => {
+                const token = Token{
+                    .child_index_queue = .init(arena.allocator(), 2),
+                    .line_number = line_number,
+                    .variant = .{ .parameter_list = .close },
+                };
+
+                try pushAndUpdateParent(&state, token, &parent);
+                while (parent.count > 0) {
+                    const index = parent.pop() catch unreachable;
+                    const variant = state.ast[index.?].?.variant;
+                    if (variant == .parameter_list and variant.parameter_list == .open) {
+                        break;
+                    }
+                }
             },
             .quote => {
                 i += 1;
@@ -153,17 +167,18 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 }
 
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 4),
+                    .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
                     .variant = .{ .literal = .{ .string = buffer[last..i] } },
                 };
 
-                const index = state.push(token);
+                try pushAndUpdateParent(&state, token, &parent);
+            },
+            .none, _ => {
+                var token = checkComplexToken(arena.allocator(), buffer, last, &i);
+                token.line_number = line_number;
 
-                const parent_index = parent.peek() catch null;
-                if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
-                    _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
-                _ = try parent.push(index);
+                try pushAndUpdateParent(&state, token, &parent);
             },
         }
         last = i;
@@ -172,21 +187,33 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
 
     try state.write(stdout);
     try stdout.flush();
+    return state;
+}
+
+fn pushAndUpdateParent(state: *State, token: Token, parent: *collections.Stack(?u64)) !void {
+    const index = state.push(token);
+
+    const parent_index = parent.*.peek() catch null;
+    if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
+        _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
+    _ = try parent.*.push(index);
 }
 
 fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64) Token {
     var found = false;
 
     while (!found and index.* < buf.len - 1) {
-        index.* += 1;
         const char: SpecialChar = @enumFromInt(buf[index.* .. index.* + 1][0]);
         switch (char) {
             _ => {},
             else => {
                 found = true;
+                break;
             },
         }
+        index.* += 1;
     }
+
     const word = buf[last..index.*];
     var token_type: TokenVariant = undefined;
 
@@ -335,11 +362,21 @@ pub const TokenVariant = enum {
     operator,
     keyword,
     literal,
+    parameter_list,
 };
 
 pub const LiteralVariant = enum { string, integer };
 
-pub const TokenType = union(TokenVariant) { declaration: enum { constant, variable }, identifier: []u8, assignment, block: enum { open, close }, operator: enum { equal, not_equal, less_than, greater_than, less_or_equal, greater_or_equal, lambda }, keyword: enum { structure, function, if_statement }, literal: union(LiteralVariant) { string: []u8, integer: []u8 } };
+pub const TokenType = union(TokenVariant) {
+    declaration: enum { constant, variable },
+    identifier: []u8,
+    assignment,
+    block: enum { open, close },
+    operator: enum { equal, not_equal, less_than, greater_than, less_or_equal, greater_or_equal, lambda },
+    keyword: enum { structure, function, if_statement },
+    literal: union(LiteralVariant) { string: []u8, integer: []u8 },
+    parameter_list: enum { open, close },
+};
 
 const SpecialChar = enum(u8) {
     none = 0,
