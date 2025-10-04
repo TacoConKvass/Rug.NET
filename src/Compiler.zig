@@ -21,7 +21,7 @@ pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
     try stdout.print("{s}\n\n", .{buffer[0..read]}); // Print contents
     try stdout.flush();
 
-    try Parser.execute(stdout, buffer[0..read]);
+    _ = try Parser.execute(stdout, buffer[0..read]);
 }
 
 pub fn generateAssembly(writer: *std.Io.Writer) !void {
