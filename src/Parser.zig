@@ -17,7 +17,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
     while (i < buffer.len) {
         var char: SpecialChar = @enumFromInt(buffer[i - 1 .. i][0]);
         switch (char) {
-            .space, .brace_close, .brace_open, .colon => { },
+            .space, .brace_close, .brace_open, .colon => {},
             .new_line => {
                 line_number += 1;
             },
@@ -144,7 +144,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 const token = Token{
                     .child_index_queue = .init(arena.allocator(), 4),
                     .line_number = line_number,
-                    .variant = .{ .literal = .{ .string = buffer[last..i] } }
+                    .variant = .{ .literal = .{ .string = buffer[last..i] } },
                 };
 
                 const index = state.push(token);
@@ -153,7 +153,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
-            }
+            },
         }
         last = i;
         i += 1;
@@ -170,8 +170,7 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
         index.* += 1;
         const char: SpecialChar = @enumFromInt(buf[index.* .. index.* + 1][0]);
         switch (char) {
-            _ => {
-            },
+            _ => {},
             else => {
                 found = true;
             },
@@ -188,37 +187,33 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     if (std.mem.eql(u8, word, "const")) {
         is_const = true;
         token_type = TokenVariant.declaration;
-    }
-    else if (std.mem.eql(u8, word, "var")) {
+    } else if (std.mem.eql(u8, word, "var")) {
         token_type = TokenVariant.declaration;
-    }
-    else if (std.mem.eql(u8, word, "struct")) {
+    } else if (std.mem.eql(u8, word, "struct")) {
         is_struct = true;
         token_type = TokenVariant.keyword;
-    }
-    else if (std.mem.eql(u8, word, "fn")) {
+    } else if (std.mem.eql(u8, word, "fn")) {
         is_fn = true;
         token_type = TokenVariant.keyword;
-    }
-    else if (std.mem.eql(u8, word, "if")) {
+    } else if (std.mem.eql(u8, word, "if")) {
         is_if = true;
         token_type = TokenVariant.keyword;
-    }
-    else token_type = TokenVariant.identifier;
+    } else token_type = TokenVariant.identifier;
 
     return Token{
         .child_index_queue = .init(alloc, 1),
         .variant = switch (token_type) {
             .declaration => TokenType{ .declaration = if (is_const) .constant else .variable },
             .identifier => TokenType{ .identifier = word },
-            .keyword => TokenType{ .keyword = 
-                // zig fmt: off
-                if (is_struct) .structure 
-                else if (is_fn) .function
-                else if (is_if) .if_statement
-                else .structure
-                // zig fmt: on
+            // zig fmt: off
+            .keyword => TokenType{
+                .keyword =
+                    if (is_struct) .structure 
+                    else if (is_fn) .function
+                    else if (is_if) .if_statement
+                    else .structure
             },
+            // zig fmt: on
             else => unreachable,
         },
     };
@@ -315,12 +310,9 @@ pub const Token = struct {
         }
         if (this.variant == .literal) {
             if (this.variant.literal == .string) {
-                return std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{ this.variant.literal.string });
-            }
-            else return std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{ this.variant.literal.integer });
-        }
-
-        else return std.fmt.bufPrint(&buffer, "{any}", .{ this.variant });
+                return std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{this.variant.literal.string});
+            } else return std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer});
+        } else return std.fmt.bufPrint(&buffer, "{any}", .{this.variant});
     }
 };
 
@@ -334,20 +326,9 @@ pub const TokenVariant = enum {
     literal,
 };
 
-pub const LiteralVariant = enum {
-    string,
-    integer
-};
+pub const LiteralVariant = enum { string, integer };
 
-pub const TokenType = union(TokenVariant) {
-    declaration: enum { constant, variable },
-    identifier: []u8,
-    assignment,
-    block: enum { open, close },
-    operator: enum { equal, not_equal, less_than, greater_than, less_or_equal, greater_or_equal, lambda },
-    keyword: enum { structure, function, if_statement },
-    literal: union(LiteralVariant) { string: []u8, integer: []u8 }
-};
+pub const TokenType = union(TokenVariant) { declaration: enum { constant, variable }, identifier: []u8, assignment, block: enum { open, close }, operator: enum { equal, not_equal, less_than, greater_than, less_or_equal, greater_or_equal, lambda }, keyword: enum { structure, function, if_statement }, literal: union(LiteralVariant) { string: []u8, integer: []u8 } };
 
 const SpecialChar = enum(u8) {
     none = 0,
