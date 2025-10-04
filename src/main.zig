@@ -49,7 +49,7 @@ const CMD = struct {
     args: *std.process.ArgIterator,
 
     pub fn build(self: *@This()) !void {
-        Compiler.execute(self.stdout, self.args);
+        try Compiler.execute(self.stdout, self.args);
     }
 
     pub fn showHelp(self: *@This()) !void {

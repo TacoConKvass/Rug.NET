@@ -3,22 +3,25 @@ const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const Parser = @import("Parser.zig");
 
-pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) void {
+pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
     const arg_path = args.next();
     var file_path: []const u8 = &.{};
     if (arg_path != null and arg_path.?.len > 1) file_path = arg_path.?[0..arg_path.?.len];
-    stdout.print("Parsing {any} {s}\n", .{ std.fs.cwd(), file_path }) catch @panic("Failed to print");
-    stdout.flush() catch @panic("Flush failed");
 
-    const file = std.fs.cwd().openFile(file_path, .{ .mode = .read_only }) catch @panic("Failed to access file");
+    try stdout.print("Parsing {s}\n\n", .{file_path});
+    try stdout.flush();
+
+    const file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
     defer file.close();
 
     var buffer: [256]u8 = undefined;
     var file_reader = file.reader(&buffer);
-    const read = file_reader.read(&buffer) catch @panic("Failed to read!");
-    stdout.print("File size {any}\n{s}", .{ read, buffer[0..read] }) catch @panic("Failed to print");
-    Parser.execute(stdout, buffer[0..read]);
-    stdout.flush() catch @panic("Flush failed");
+    const read = try file_reader.read(&buffer);
+
+    try stdout.print("{s}\n\n", .{buffer[0..read]}); // Print contents
+    try stdout.flush();
+
+    try Parser.execute(stdout, buffer[0..read]);
 }
 
 pub fn generateAssembly(writer: *std.Io.Writer) !void {
