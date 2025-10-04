@@ -6,4 +6,5 @@ const A = struct {
 
 const main = fn() void {
     sys.Console.WriteLine("I have been called from Cig#");
+    if (a == b) {}
 };
