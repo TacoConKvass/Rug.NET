@@ -16,7 +16,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
     var i: u64 = 1;
     while (i < buffer.len) {
         var char: SpecialChar = @enumFromInt(buffer[i - 1 .. i][0]);
-        switch (char) {
+        char_check: switch (char) {
             .space, .brace_close, .brace_open, .colon => {},
             .new_line => {
                 line_number += 1;
@@ -29,7 +29,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 };
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -42,15 +42,26 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 };
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = parent.pop() catch 0;
+                continue :char_check .comma;
             },
-            .end_statement => {
-                _ = parent.pop() catch 0;
+            .end_statement, .comma => {
+                while (parent.count > 0) {
+                    const index = parent.pop() catch unreachable;
+                    const variant = state.ast[index.?].?.variant;
+                    if (variant == .block) {
+                        _ = try parent.push(index);
+                        break;
+                    }
+                    if (variant == .declaration) {
+                        break;
+                    }
+                }
             },
-            .equals => {
+           .equals => {
                 var token = Token{
                     .child_index_queue = .init(arena.allocator(), 4),
                     .line_number = line_number,
@@ -70,7 +81,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
 
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -94,7 +105,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
 
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -118,7 +129,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
 
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -128,7 +139,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
                 token.line_number = line_number;
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -149,7 +160,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !void {
 
                 const index = state.push(token);
 
-                const parent_index = parent.pop() catch null;
+                const parent_index = parent.peek() catch null;
                 if (parent_index != null and state.ast[parent_index.?].?.child_index_queue != null)
                     _ = try state.ast[parent_index.?].?.child_index_queue.?.push(index);
                 _ = try parent.push(index);
@@ -303,7 +314,7 @@ pub const Token = struct {
     pub fn variantName(this: *const @This()) ![]u8 {
         var buffer: [256]u8 = undefined;
         if (this.variant == .identifier) {
-            return std.fmt.bufPrint(&buffer, ".{{ .indentifier = {s} }}", .{this.variant.identifier});
+            return std.fmt.bufPrint(&buffer, ".{{ .identifier = {s} }}", .{this.variant.identifier});
         }
         if (this.variant == .assignment) {
             return std.fmt.bufPrint(&buffer, ".{{ .assignement }}", .{});
@@ -344,5 +355,6 @@ const SpecialChar = enum(u8) {
     brace_close = ')',
     colon = ':',
     quote = '"',
+    comma = ',',
     _,
 };
