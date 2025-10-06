@@ -7,4 +7,7 @@ const A = struct {
 const main = fn() void {
     sys.Console.WriteLine("I have been called from Cig#");
     if (a == b) {}
+
+    while (true) {}
+    for (0..10) |i| {}
 };
