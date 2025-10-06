@@ -17,11 +17,25 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
     while (i < buffer.len) {
         var char: SpecialChar = @enumFromInt(buffer[i - 1 .. i][0]);
         switch (char) {
-            .space, .colon => {},
+            .space, .colon, .dot => {},
             .new_line => {
                 line_number += 1;
             },
             .block_open => {
+                if (parent.count > 0) {
+                    var index = parent.pop() catch break;
+                    if (state.ast[index.?].?.variant == .capture) capture_check:{
+                        index = parent.pop() catch break :capture_check;
+                        while (parent.count > 0 and state.ast[index.?].?.variant != .capture) {
+                            index = parent.pop() catch break :capture_check;
+                        }
+                        // _ = try parent.pop();
+                    }
+                    else {
+                        _ = try parent.push(index);
+                    }
+                }
+
                 const token = Token{
                     .child_index_queue = .init(arena.allocator(), 2),
                     .line_number = line_number,
@@ -70,7 +84,9 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
                         break;
                     }
                     if (variant == .parameter_list and variant.parameter_list == .open) {
-                        // _ = try parent.push(index);
+                        break;
+                    }
+                    if (variant == .capture) {
                         break;
                     }
                 }
@@ -174,7 +190,22 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
 
                 try pushAndUpdateParent(&state, token, &parent);
             },
-            .none, _ => {
+            .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine => {
+                var token = checkNumberLiteral(arena.allocator(), buffer, last, &i);
+                token.line_number = line_number;
+
+                try pushAndUpdateParent(&state, token, &parent);
+            },
+            .capture => {
+                const token_capture_open = Token{
+                    .child_index_queue = .init(arena.allocator(), 2),
+                    .variant = .capture,
+                    .line_number = line_number,
+                };
+ 
+                try pushAndUpdateParent(&state, token_capture_open, &parent);
+            },
+            .none, .underscore, _ => {
                 var token = checkComplexToken(arena.allocator(), buffer, last, &i);
                 token.line_number = line_number;
 
@@ -205,7 +236,7 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     while (!found and index.* < buf.len - 1) {
         const char: SpecialChar = @enumFromInt(buf[index.* .. index.* + 1][0]);
         switch (char) {
-            _ => {},
+            _, .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine, .underscore => {},
             else => {
                 found = true;
                 break;
@@ -221,6 +252,8 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     var is_struct = false;
     var is_fn = false;
     var is_if = false;
+    var is_for = false;
+    var is_while = false;
 
     if (std.mem.eql(u8, word, "const")) {
         is_const = true;
@@ -236,6 +269,12 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     } else if (std.mem.eql(u8, word, "if")) {
         is_if = true;
         token_type = TokenVariant.keyword;
+    } else if (std.mem.eql(u8, word, "while")) {
+        is_while = true;
+        token_type = TokenVariant.keyword;
+    } else if (std.mem.eql(u8, word, "for")) {
+        is_for = true;
+        token_type = TokenVariant.keyword;
     } else token_type = TokenVariant.identifier;
 
     return Token{
@@ -249,11 +288,52 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
                     if (is_struct) .structure 
                     else if (is_fn) .function
                     else if (is_if) .if_statement
-                    else .structure
+                    else if (is_for) .for_loop
+                    else if (is_while) .while_loop
+                    else unreachable
             },
             // zig fmt: on
             else => unreachable,
         },
+    };
+}
+
+fn checkNumberLiteral(alloc: std.mem.Allocator, buffer: []u8, last: u64, i: *u64) Token {
+    i.* += 1;
+    var char: SpecialChar = @enumFromInt(buffer[i.* - 1 .. i.*][0]);
+    var is_float = false;
+    var is_range = false;
+    while (true) {
+        switch (char) {
+            .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine => {},
+            .dot => {
+                if (is_range or is_float) continue;
+                i.* += 1;
+                char = @enumFromInt(buffer[i.* - 1 .. i.*][0]);
+                switch (char) {
+                    .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine => is_float = true,
+                    .dot => is_range = true,
+                    else => break,
+                }
+            },
+            else => break,
+        }
+        i.* += 1;
+        char = @enumFromInt(buffer[i.* - 1 .. i.*][0]);
+    }
+
+    i.* -= 1;
+    const word = buffer[last..i.*];
+
+    return Token{
+        .child_index_queue = .init(alloc, 2),
+        // zig fmt: off
+        .variant = .{ .literal =
+            if (is_float) .{ .float = word }
+            else if (is_range) .{ .range = word }
+            else .{ .integer = word },
+        },
+        // zig fmt: on
     };
 }
 
@@ -349,7 +429,16 @@ pub const Token = struct {
         if (this.variant == .literal) {
             if (this.variant.literal == .string) {
                 return std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{this.variant.literal.string});
-            } else return std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer});
+            } else if (this.variant.literal == .integer) {
+                return std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer});
+            } else if (this.variant.literal == .float ) {
+                return std.fmt.bufPrint(&buffer, ".{{ .float_literal = {s} }}", .{this.variant.literal.float});
+            } else if (this.variant.literal == .boolean) {
+                return std.fmt.bufPrint(&buffer, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean});
+            } else if (this.variant.literal == .range) {
+                return std.fmt.bufPrint(&buffer, ".{{ .range_literal = {s} }}", .{this.variant.literal.range});
+            }
+            unreachable;
         } else return std.fmt.bufPrint(&buffer, "{any}", .{this.variant});
     }
 };
@@ -363,19 +452,47 @@ pub const TokenVariant = enum {
     keyword,
     literal,
     parameter_list,
+    capture
 };
 
-pub const LiteralVariant = enum { string, integer };
+pub const LiteralVariant = enum {
+    string,
+    integer,
+    float,
+    boolean,
+    range,
+};
 
 pub const TokenType = union(TokenVariant) {
     declaration: enum { constant, variable },
     identifier: []u8,
     assignment,
     block: enum { open, close },
-    operator: enum { equal, not_equal, less_than, greater_than, less_or_equal, greater_or_equal, lambda },
-    keyword: enum { structure, function, if_statement },
-    literal: union(LiteralVariant) { string: []u8, integer: []u8 },
+    operator: enum {
+        equal,
+        not_equal,
+        less_than,
+        greater_than,
+        less_or_equal,
+        greater_or_equal,
+        lambda,
+    },
+    keyword: enum {
+        structure,
+        function,
+        if_statement,
+        for_loop,
+        while_loop,
+    },
+    literal: union(LiteralVariant) {
+        string: []u8,
+        integer: []u8,
+        float: []u8,
+        boolean: bool,
+        range: []u8,
+    },
     parameter_list: enum { open, close },
+    capture,
 };
 
 const SpecialChar = enum(u8) {
@@ -393,5 +510,18 @@ const SpecialChar = enum(u8) {
     colon = ':',
     quote = '"',
     comma = ',',
+    dot = '.',
+    underscore = '_',
+    capture = '|',
+    zero = '0',
+    one = '1',
+    two = '2',
+    three = '3',
+    four = '4',
+    five = '5',
+    six = '6',
+    seven = '7',
+    eight = '8',
+    nine = '9',
     _,
 };
