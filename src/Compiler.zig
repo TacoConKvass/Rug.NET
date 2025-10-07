@@ -14,14 +14,15 @@ pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
     const file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
     defer file.close();
 
-    var buffer: [256]u8 = undefined;
-    var file_reader = file.reader(&buffer);
-    const read = try file_reader.read(&buffer);
+    const file_stat = try file.stat();
 
-    try stdout.print("{s}\n\n", .{buffer[0..read]}); // Print contents
+    var file_reader = file.reader(&.{});
+    const read_data = try file_reader.interface.readAlloc(std.heap.page_allocator, file_stat.size);
+
+    try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    _ = try Parser.execute(stdout, buffer[0..read]);
+    _ = try Parser.execute(stdout, read_data);
 }
 
 pub fn generateAssembly(writer: *std.Io.Writer) !void {
