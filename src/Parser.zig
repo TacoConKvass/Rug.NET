@@ -24,14 +24,13 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             .block_open => {
                 if (parent.count > 0) {
                     var index = parent.pop() catch break;
-                    if (state.ast[index.?].?.variant == .capture) capture_check:{
+                    if (state.ast[index.?].?.variant == .capture) capture_check: {
                         index = parent.pop() catch break :capture_check;
                         while (parent.count > 0 and state.ast[index.?].?.variant != .capture) {
                             index = parent.pop() catch break :capture_check;
                         }
                         // _ = try parent.pop();
-                    }
-                    else {
+                    } else {
                         _ = try parent.push(index);
                     }
                 }
@@ -202,7 +201,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
                     .variant = .capture,
                     .line_number = line_number,
                 };
- 
+
                 try pushAndUpdateParent(&state, token_capture_open, &parent);
             },
             .none, .underscore, _ => {
@@ -419,21 +418,20 @@ pub const Token = struct {
     child_index_queue: ?collections.Stack(?u64),
 
     pub fn variantName(this: *const @This(), alloc: std.mem.Allocator) ![]u8 {
-        if (this.variant == .identifier) {
-            return std.fmt.allocPrint(alloc, ".{{ .identifier = {s} }}", .{this.variant.identifier});
-        }
-        if (this.variant == .assignment) {
-            return std.fmt.allocPrint(alloc, ".{{ .assignement }}", .{});
-        }
-        if (this.variant == .literal) {
-            return switch (this.variant.literal) {
-                .string => std.fmt.allocPrint(alloc, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
-                .integer => std.fmt.allocPrint(alloc, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
-                .float => std.fmt.allocPrint(alloc, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
-                .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
-                .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
-            };
-        } else return std.fmt.allocPrint(alloc, "{any}", .{this.variant});
+        return try switch (this.variant) {
+            .identifier => std.fmt.allocPrint(alloc, ".{{ .identifier = {s} }}", .{this.variant.identifier}),
+            .assignment => std.fmt.allocPrint(alloc, ".{{ .assignement }}", .{}),
+            .literal => {
+                return try switch (this.variant.literal) {
+                    .string => std.fmt.allocPrint(alloc, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
+                    .integer => std.fmt.allocPrint(alloc, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
+                    .float => std.fmt.allocPrint(alloc, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
+                    .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
+                    .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
+                };
+            },
+            else => std.fmt.allocPrint(alloc, "{any}", .{this.variant}),
+        };
     }
 };
 
@@ -446,7 +444,7 @@ pub const TokenVariant = enum {
     keyword,
     literal,
     parameter_list,
-    capture
+    capture,
 };
 
 pub const LiteralVariant = enum {
