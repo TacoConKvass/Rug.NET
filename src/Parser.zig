@@ -427,18 +427,13 @@ pub const Token = struct {
             return std.fmt.bufPrint(&buffer, ".{{ .assignement }}", .{});
         }
         if (this.variant == .literal) {
-            if (this.variant.literal == .string) {
-                return std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{this.variant.literal.string});
-            } else if (this.variant.literal == .integer) {
-                return std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer});
-            } else if (this.variant.literal == .float ) {
-                return std.fmt.bufPrint(&buffer, ".{{ .float_literal = {s} }}", .{this.variant.literal.float});
-            } else if (this.variant.literal == .boolean) {
-                return std.fmt.bufPrint(&buffer, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean});
-            } else if (this.variant.literal == .range) {
-                return std.fmt.bufPrint(&buffer, ".{{ .range_literal = {s} }}", .{this.variant.literal.range});
-            }
-            unreachable;
+            return switch (this.variant.literal) {
+                .string => std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
+                .integer => std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
+                .float => std.fmt.bufPrint(&buffer, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
+                .range => std.fmt.bufPrint(&buffer, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
+                .boolean => std.fmt.bufPrint(&buffer, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
+            };
         } else return std.fmt.bufPrint(&buffer, "{any}", .{this.variant});
     }
 };
