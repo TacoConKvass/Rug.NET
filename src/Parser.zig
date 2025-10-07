@@ -216,7 +216,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
         i += 1;
     }
 
-    try state.write(stdout);
+    try state.write(stdout, arena.allocator());
     try stdout.flush();
     return state;
 }
@@ -370,16 +370,16 @@ const State = struct {
         return this.count - 1;
     }
 
-    pub fn write(this: *@This(), writer: *std.Io.Writer) Error!void {
+    pub fn write(this: *@This(), writer: *std.Io.Writer, alloc: std.mem.Allocator) Error!void {
         this.printed = this.allocator.alloc(bool, this.count + 1) catch return error.OutOfMemory;
         defer this.allocator.free(this.printed);
 
         for (0..this.count) |index| {
-            try this.printToken(writer, index, 0);
+            try this.printToken(writer, index, 0, alloc);
         }
     }
 
-    fn printToken(this: *@This(), writer: *std.Io.Writer, token_index: u64, level: u64) !void {
+    fn printToken(this: *@This(), writer: *std.Io.Writer, token_index: u64, level: u64, alloc: std.mem.Allocator) !void {
         if (this.printed[token_index]) return;
         const token = this.ast[token_index].?;
 
@@ -389,7 +389,7 @@ const State = struct {
 
             try writer.print("|- Token {any}: .{{ {s} .line = {any}, .child = {any} }}\n", .{
                 token_index,
-                token.variantName() catch "",
+                token.variantName(alloc) catch "",
                 token.line_number,
                 &.{},
             });
@@ -402,14 +402,14 @@ const State = struct {
             _ = try writer.write(&.{' '}); // indent
         try writer.print("|- Token {any}: .{{ {s} .line = {any}, .child = {any} }}\n", .{
             token_index,
-            token.variantName() catch "",
+            token.variantName(alloc) catch "",
             token.line_number,
             children_stack.buffer[0..children_stack.count],
         });
         this.printed[token_index] = true;
 
         for (0..children_stack.count) |i|
-            try this.printToken(writer, children_stack.buffer[i].?.?, level + 1);
+            try this.printToken(writer, children_stack.buffer[i].?.?, level + 1, alloc);
     }
 };
 
@@ -418,23 +418,22 @@ pub const Token = struct {
     line_number: u64 = 0,
     child_index_queue: ?collections.Stack(?u64),
 
-    pub fn variantName(this: *const @This()) ![]u8 {
-        var buffer: [256]u8 = undefined;
+    pub fn variantName(this: *const @This(), alloc: std.mem.Allocator) ![]u8 {
         if (this.variant == .identifier) {
-            return std.fmt.bufPrint(&buffer, ".{{ .identifier = {s} }}", .{this.variant.identifier});
+            return std.fmt.allocPrint(alloc, ".{{ .identifier = {s} }}", .{this.variant.identifier});
         }
         if (this.variant == .assignment) {
-            return std.fmt.bufPrint(&buffer, ".{{ .assignement }}", .{});
+            return std.fmt.allocPrint(alloc, ".{{ .assignement }}", .{});
         }
         if (this.variant == .literal) {
             return switch (this.variant.literal) {
-                .string => std.fmt.bufPrint(&buffer, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
-                .integer => std.fmt.bufPrint(&buffer, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
-                .float => std.fmt.bufPrint(&buffer, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
-                .range => std.fmt.bufPrint(&buffer, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
-                .boolean => std.fmt.bufPrint(&buffer, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
+                .string => std.fmt.allocPrint(alloc, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
+                .integer => std.fmt.allocPrint(alloc, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
+                .float => std.fmt.allocPrint(alloc, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
+                .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
+                .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
             };
-        } else return std.fmt.bufPrint(&buffer, "{any}", .{this.variant});
+        } else return std.fmt.allocPrint(alloc, "{any}", .{this.variant});
     }
 };
 
