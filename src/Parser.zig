@@ -419,16 +419,14 @@ pub const Token = struct {
 
     pub fn variantName(this: *const @This(), alloc: std.mem.Allocator) ![]u8 {
         return try switch (this.variant) {
-            .identifier => std.fmt.allocPrint(alloc, ".{{ .identifier = {s} }}", .{this.variant.identifier}),
+            .identifier => |id| std.fmt.allocPrint(alloc, ".{{ .identifier = {s} }}", .{id}),
             .assignment => std.fmt.allocPrint(alloc, ".{{ .assignement }}", .{}),
-            .literal => {
-                return try switch (this.variant.literal) {
-                    .string => std.fmt.allocPrint(alloc, ".{{ .string_literal = {s} }}", .{this.variant.literal.string}),
-                    .integer => std.fmt.allocPrint(alloc, ".{{ .int_literal = {s} }}", .{this.variant.literal.integer}),
-                    .float => std.fmt.allocPrint(alloc, ".{{ .float_literal = {s} }}", .{this.variant.literal.float}),
-                    .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{this.variant.literal.range}),
-                    .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{this.variant.literal.boolean}),
-                };
+            .literal => |literal| switch (this.variant.literal) {
+                .string => std.fmt.allocPrint(alloc, ".{{ .string_literal = {s} }}", .{literal.string}),
+                .integer => std.fmt.allocPrint(alloc, ".{{ .int_literal = {s} }}", .{literal.integer}),
+                .float => std.fmt.allocPrint(alloc, ".{{ .float_literal = {s} }}", .{literal.float}),
+                .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{literal.range}),
+                .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{literal.boolean}),
             },
             else => std.fmt.allocPrint(alloc, "{any}", .{this.variant}),
         };
