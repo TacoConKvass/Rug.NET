@@ -1,23 +1,19 @@
 const std = @import("std");
 const collections = @import("collections.zig");
 
-pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
+pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
     var last: u64 = 0;
     var line_number: u64 = 1;
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+    var state = State.init(alloc);
 
-    var state = State.init(arena.allocator());
-    defer state.deinit();
-
-    var parent = collections.Stack(?u64).init(arena.allocator(), 8);
+    var parent = collections.Stack(?u64).init(alloc, 8);
     defer parent.deinit();
 
     var i: u64 = 1;
     while (i < buffer.len) {
         var char: SpecialChar = @enumFromInt(buffer[i - 1 .. i][0]);
         switch (char) {
-            .space, .colon, .dot => {},
+            .space, .colon, .dot, .quote => {},
             .new_line => {
                 line_number += 1;
             },
@@ -36,7 +32,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
                 }
 
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = .{ .block = .open },
                 };
@@ -45,7 +41,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .block_close => {
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = .{ .block = .close },
                 };
@@ -92,7 +88,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .equals => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -112,7 +108,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .greater => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -131,7 +127,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .lesser => {
                 var token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = undefined,
                 };
@@ -150,7 +146,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .brace_open => {
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = .{ .parameter_list = .open },
                 };
@@ -159,7 +155,7 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
             },
             .brace_close => {
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = .{ .parameter_list = .close },
                 };
@@ -173,16 +169,16 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
                     }
                 }
             },
-            .quote => {
+            .double_quote => {
                 i += 1;
                 char = @enumFromInt(buffer[i - 1 .. i][0]);
-                while (char != .quote) {
+                while (char != .double_quote) {
                     i += 1;
                     char = @enumFromInt(buffer[i - 1 .. i][0]);
                 }
 
                 const token = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .line_number = line_number,
                     .variant = .{ .literal = .{ .string = buffer[last..i] } },
                 };
@@ -190,22 +186,22 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
                 try pushAndUpdateParent(&state, token, &parent);
             },
             .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine => {
-                var token = checkNumberLiteral(arena.allocator(), buffer, last, &i);
+                var token = checkNumberLiteral(alloc, buffer, last, &i);
                 token.line_number = line_number;
 
                 try pushAndUpdateParent(&state, token, &parent);
             },
             .capture => {
                 const token_capture_open = Token{
-                    .child_index_queue = .init(arena.allocator(), 2),
+                    .child_index_queue = .init(alloc, 2),
                     .variant = .capture,
                     .line_number = line_number,
                 };
 
                 try pushAndUpdateParent(&state, token_capture_open, &parent);
             },
-            .none, .underscore, _ => {
-                var token = checkComplexToken(arena.allocator(), buffer, last, &i);
+            .underscore, _ => {
+                var token = checkComplexToken(alloc, buffer, last, &i);
                 token.line_number = line_number;
 
                 try pushAndUpdateParent(&state, token, &parent);
@@ -215,8 +211,6 @@ pub fn execute(stdout: *std.Io.Writer, buffer: []u8) !State {
         i += 1;
     }
 
-    try state.write(stdout, arena.allocator());
-    try stdout.flush();
     return state;
 }
 
@@ -395,6 +389,7 @@ pub const Token = struct {
                 .range => std.fmt.allocPrint(alloc, ".{{ .range_literal = {s} }}", .{literal.range}),
                 .boolean => std.fmt.allocPrint(alloc, ".{{ .bool_literal = {any} }}", .{literal.boolean}),
             },
+            .capture => std.fmt.allocPrint(alloc, ".{{ .capture }}", .{}),
             else => std.fmt.allocPrint(alloc, "{any}", .{this.variant}),
         };
     }
@@ -463,7 +458,6 @@ pub const keywords = std.StaticStringMap(TokenType).initComptime(.{
 });
 
 const SpecialChar = enum(u8) {
-    none = 0,
     space = ' ',
     new_line = '\n',
     block_open = '{',
@@ -475,7 +469,8 @@ const SpecialChar = enum(u8) {
     brace_open = '(',
     brace_close = ')',
     colon = ':',
-    quote = '"',
+    quote = '\'',
+    double_quote = '"',
     comma = ',',
     dot = '.',
     underscore = '_',

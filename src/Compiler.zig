@@ -22,7 +22,15 @@ pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    _ = try Parser.execute(stdout, read_data);
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    var state = try Parser.execute(read_data, arena.allocator());
+    defer state.deinit();
+
+    // Output AST
+    try state.write(stdout, arena.allocator());
+    try stdout.flush();
 }
 
 pub fn generateAssembly(writer: *std.Io.Writer) !void {
