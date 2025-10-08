@@ -235,7 +235,19 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     while (!found and index.* < buf.len - 1) {
         const char: SpecialChar = @enumFromInt(buf[index.* .. index.* + 1][0]);
         switch (char) {
-            _, .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine, .underscore => {},
+            _,
+            .zero,
+            .one,
+            .two,
+            .three,
+            .four,
+            .five,
+            .six,
+            .seven,
+            .eight,
+            .nine,
+            .underscore,
+            => {},
             else => {
                 found = true;
                 break;
@@ -245,55 +257,10 @@ fn checkComplexToken(alloc: std.mem.Allocator, buf: []u8, last: u64, index: *u64
     }
 
     const word = buf[last..index.*];
-    var token_type: TokenVariant = undefined;
-
-    var is_const = false;
-    var is_struct = false;
-    var is_fn = false;
-    var is_if = false;
-    var is_for = false;
-    var is_while = false;
-
-    if (std.mem.eql(u8, word, "const")) {
-        is_const = true;
-        token_type = TokenVariant.declaration;
-    } else if (std.mem.eql(u8, word, "var")) {
-        token_type = TokenVariant.declaration;
-    } else if (std.mem.eql(u8, word, "struct")) {
-        is_struct = true;
-        token_type = TokenVariant.keyword;
-    } else if (std.mem.eql(u8, word, "fn")) {
-        is_fn = true;
-        token_type = TokenVariant.keyword;
-    } else if (std.mem.eql(u8, word, "if")) {
-        is_if = true;
-        token_type = TokenVariant.keyword;
-    } else if (std.mem.eql(u8, word, "while")) {
-        is_while = true;
-        token_type = TokenVariant.keyword;
-    } else if (std.mem.eql(u8, word, "for")) {
-        is_for = true;
-        token_type = TokenVariant.keyword;
-    } else token_type = TokenVariant.identifier;
 
     return Token{
         .child_index_queue = .init(alloc, 1),
-        .variant = switch (token_type) {
-            .declaration => TokenType{ .declaration = if (is_const) .constant else .variable },
-            .identifier => TokenType{ .identifier = word },
-            // zig fmt: off
-            .keyword => TokenType{
-                .keyword =
-                    if (is_struct) .structure 
-                    else if (is_fn) .function
-                    else if (is_if) .if_statement
-                    else if (is_for) .for_loop
-                    else if (is_while) .while_loop
-                    else unreachable
-            },
-            // zig fmt: on
-            else => unreachable,
-        },
+        .variant = keywords.get(word) orelse TokenType{ .identifier = word },
     };
 }
 
@@ -306,7 +273,7 @@ fn checkNumberLiteral(alloc: std.mem.Allocator, buffer: []u8, last: u64, i: *u64
         switch (char) {
             .zero, .one, .two, .three, .four, .five, .six, .seven, .eight, .nine => {},
             .dot => {
-                if (is_range or is_float) continue;
+                if (is_range or is_float) continue; // Invalid but this is going to be detected in the next phase
                 i.* += 1;
                 char = @enumFromInt(buffer[i.* - 1 .. i.*][0]);
                 switch (char) {
@@ -484,6 +451,16 @@ pub const TokenType = union(TokenVariant) {
     parameter_list: enum { open, close },
     capture,
 };
+
+pub const keywords = std.StaticStringMap(TokenType).initComptime(.{
+    .{ "const", TokenType{ .declaration = .constant } },
+    .{ "var", TokenType{ .declaration = .variable } },
+    .{ "struct", TokenType{ .keyword = .structure } },
+    .{ "fn", TokenType{ .keyword = .function } },
+    .{ "for", TokenType{ .keyword = .for_loop } },
+    .{ "while", TokenType{ .keyword = .while_loop } },
+    .{ "if", TokenType{ .keyword = .if_statement } },
+});
 
 const SpecialChar = enum(u8) {
     none = 0,
