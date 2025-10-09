@@ -5,10 +5,13 @@ const Compiler = @import("Compiler.zig");
 const version = "0.0.1";
 
 pub fn main() !void {
-    var args = std.process.args(); // exe args
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
 
-    const path = args.next() orelse ""; // exe path
-    const command_text = args.next() orelse "";
+    var args = std.process.args();
+
+    const path = args.next() orelse unreachable; // exe path
+    const command_text = args.next() orelse "help";
 
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
@@ -17,19 +20,19 @@ pub fn main() !void {
     var cmd = CMD{
         .path = path,
         .command_text = command_text,
-        .command = std.meta.stringToEnum(Command, command_text) orelse .null,
+        .command = std.meta.stringToEnum(Command, command_text) orelse .help,
         .args = &args,
         .stdout = stdout,
     };
 
     try switch (cmd.command) {
-        .build => cmd.build(),
+        .build => cmd.build(arena.allocator()),
         .init => {
             try stdout.print("{any}\n", .{cmd.command});
             try stdout.flush();
         },
         .version => cmd.showVersion(),
-        .help, .null => cmd.showHelp(),
+        .help => cmd.showHelp(),
     };
 }
 
@@ -37,7 +40,6 @@ const Command = enum {
     build,
     help,
     init,
-    null,
     version,
 };
 
@@ -48,13 +50,13 @@ const CMD = struct {
     stdout: *std.Io.Writer,
     args: *std.process.ArgIterator,
 
-    pub fn build(self: *@This()) !void {
-        try Compiler.execute(self.stdout, self.args);
+    pub fn build(self: *@This(), alloc: std.mem.Allocator) !void {
+        try Compiler.execute(self.stdout, alloc, self.args);
     }
 
     pub fn showHelp(self: *@This()) !void {
-        if (self.command == .null and !std.mem.eql(u8, self.command_text, "")) {
-            try self.stdout.print("Unknown command '{s}'\n", .{self.command_text});
+        if (!std.mem.eql(u8, self.command_text, "help")) {
+            try self.stdout.print("Unknown command '{s}'\n\n", .{self.command_text});
         }
 
         try self.stdout.print(

@@ -3,7 +3,7 @@ const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const Parser = @import("Parser.zig");
 
-pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
+pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: *std.process.ArgIterator) !void {
     const arg_path = args.next();
     var file_path: []const u8 = &.{};
     if (arg_path != null and arg_path.?.len > 1) file_path = arg_path.?[0..arg_path.?.len];
@@ -22,14 +22,11 @@ pub fn execute(stdout: *std.Io.Writer, args: *std.process.ArgIterator) !void {
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    var state = try Parser.execute(read_data, arena.allocator());
+    var state = try Parser.execute(read_data, alloc);
     defer state.deinit();
 
     // Output AST
-    try state.write(stdout, arena.allocator());
+    try state.write(stdout, alloc);
     try stdout.flush();
 }
 
