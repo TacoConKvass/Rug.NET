@@ -6,11 +6,11 @@ const Compiler = @import("Compiler.zig");
 const version = "0.0.1";
 
 pub fn main() !void {
+    var debug_alloc = std.heap.DebugAllocator(.{}).init;
     var gpa: std.mem.Allocator = undefined;
     var debug: bool = undefined;
     switch (builtin.mode) {
         .Debug, .ReleaseSafe => {
-            var debug_alloc = std.heap.DebugAllocator(.{}).init;
             gpa = debug_alloc.allocator();
             debug = true;
         },
@@ -19,6 +19,9 @@ pub fn main() !void {
             debug = false;
         }
     }
+    defer if (debug) {
+        std.debug.print("\n{any}", .{ debug_alloc.deinit() });
+    };
 
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
