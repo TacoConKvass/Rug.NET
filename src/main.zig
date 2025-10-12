@@ -1,11 +1,26 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const pe = @import("pe.zig");
 const Compiler = @import("Compiler.zig");
 
 const version = "0.0.1";
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var gpa: std.mem.Allocator = undefined;
+    var debug: bool = undefined;
+    switch (builtin.mode) {
+        .Debug, .ReleaseSafe => {
+            var debug_alloc = std.heap.DebugAllocator(.{}).init;
+            gpa = debug_alloc.allocator();
+            debug = true;
+        },
+        .ReleaseFast, .ReleaseSmall => {
+            gpa = std.heap.smp_allocator;
+            debug = false;
+        }
+    }
+
+    var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
 
     var args = std.process.args();

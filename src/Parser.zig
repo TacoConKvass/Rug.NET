@@ -317,6 +317,10 @@ const State = struct {
     }
 
     pub fn deinit(this: *@This()) void {
+        for (this.ast) |*token| {
+            if (token.* == null) continue;
+            token.*.?.child_index_queue.?.deinit();
+        }
         this.allocator.free(this.ast);
     }
 
