@@ -5,7 +5,7 @@ const A = struct {
 };
 
 const main = fn() void {
-    sys.Console.WriteLine("I have been called from Cig#");
+    sys.Console.WriteLine("I have been called from Rug");
     if (a == b) {}
 
     while (true) {}

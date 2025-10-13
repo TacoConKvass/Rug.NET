@@ -1,2 +1,2 @@
-# cig
-A .NET compiler for Cig written in Zig
+# Rug.NET
+A .NET compiler for Rug written in Zig

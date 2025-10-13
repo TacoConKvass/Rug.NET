@@ -78,12 +78,12 @@ const CMD = struct {
         }
 
         try self.stdout.print(
-            \\cig - A .NET compiler for Cig# 
-            \\Usage: cig [command]
+            \\Rug.NET - A .NET compiler for Rug 
+            \\Usage: rug [command]
             \\
             \\Available commands:
             \\    help - Display this message
-            \\    init - Initializes a Cig# project
+            \\    init - Initializes a Rug project
             \\    version - Show version and executable path
             \\
         , .{});
@@ -91,7 +91,7 @@ const CMD = struct {
     }
 
     pub fn showVersion(self: *@This()) !void {
-        try self.stdout.print("cig v{s} - {s}\n", .{ version, self.path });
+        try self.stdout.print("rug v{s} - {s}\n", .{ version, self.path });
         try self.stdout.flush(); // Don't forget to flush!
     }
 };
