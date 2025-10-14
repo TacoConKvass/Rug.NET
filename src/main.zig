@@ -26,25 +26,75 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
 
-    var args = std.process.args();
+    const alloc = arena.allocator();
 
-    const path = args.next() orelse unreachable; // exe path
-    const command_text = args.next() orelse "help";
+    const arg_list = try std.process.argsAlloc(alloc);
+    defer std.process.argsFree(alloc, arg_list);
+
+    var args = std.process.args();
+    _ = args.next();
+    _ = args.next();
+
+    const path = arg_list[0];
+    const command_text = if (arg_list.len >= 2) arg_list[1] else "help";
+    const command = std.meta.stringToEnum(Command, command_text) orelse .help;
+
+    var build_args = BuildFlags.init(alloc);
+    defer build_args.deinit();
+
+    if (arg_list.len >= 3) {
+        switch (command) {
+            .build => {
+                for (arg_list[2..]) |arg| { // Skip rug exe path and command
+                    if (arg.len < 2) {
+                        try build_args.put(.invalid, arg);
+                        break;
+                    }
+
+                    if (arg[0] == '-') {
+                        const index: u64 = if (arg[1] == '-') 2 else 1;
+                        const eql_inndex = retireved: {
+                            for (arg[index..], index..) |char, i| {
+                                if (char == '=') break :retireved i;
+                            }
+
+                            break :retireved arg.len;
+                        };
+                        const key = std.meta.stringToEnum(BuildArgs, arg[index..eql_inndex]) orelse .invalid;
+                    std.debug.print("{s} {any}\n", .{arg[index..eql_inndex], key});
+                        try build_args.put(key, arg[eql_inndex..]);
+                        if (key == .invalid) break;
+
+                        continue;
+                    }
+
+                    try build_args.put(.source_file, arg);
+                }
+            },
+            else => {},
+        }
+    }
 
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var cmd = CMD{
+    const cmd_args = CmdArgs{
+        .build = build_args,
+        .help = HelpArgs.help,
+    };
+
+    var cmd = Cmd{
         .path = path,
         .command_text = command_text,
-        .command = std.meta.stringToEnum(Command, command_text) orelse .help,
-        .args = &args,
+        .command = command,
         .stdout = stdout,
+        .args = &args,
+        .cmd_args = cmd_args,
     };
 
     try switch (cmd.command) {
-        .build => cmd.build(arena.allocator()),
+        .build => cmd.build(alloc),
         .init => {
             try stdout.print("{any}\n", .{cmd.command});
             try stdout.flush();
@@ -61,15 +111,31 @@ const Command = enum {
     version,
 };
 
-const CMD = struct {
+pub const BuildFlags = std.AutoHashMap(BuildArgs, [:0]const u8);
+
+const CmdArgs = struct {
+    build: BuildFlags,
+    help: HelpArgs,
+};
+
+pub const BuildArgs = enum {
+    show_ast,
+    source_file,
+    invalid,
+};
+
+const HelpArgs = Command;
+
+const Cmd = struct {
     path: [:0]const u8,
     command_text: [:0]const u8,
     command: Command,
     stdout: *std.Io.Writer,
     args: *std.process.ArgIterator,
+    cmd_args: CmdArgs,
 
     pub fn build(self: *@This(), alloc: std.mem.Allocator) !void {
-        try Compiler.execute(self.stdout, alloc, self.args);
+        try Compiler.execute(self.stdout, alloc, self.cmd_args.build);
     }
 
     pub fn showHelp(self: *@This()) !void {

@@ -2,9 +2,10 @@ const std = @import("std");
 const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const Parser = @import("Parser.zig");
+const main = @import("main.zig");
 
-pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: *std.process.ArgIterator) !void {
-    const arg_path = args.next();
+pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.BuildFlags) !void {
+    const arg_path = args.get(.source_file);
     var file_path: []const u8 = &.{};
     if (arg_path != null and arg_path.?.len > 1) file_path = arg_path.?[0..arg_path.?.len];
 
@@ -26,8 +27,10 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: *std.proc
     defer state.deinit();
 
     // Output AST
-    try state.write(stdout, alloc);
-    try stdout.flush();
+    if (args.get(.show_ast) != null) {
+        try state.write(stdout, alloc);
+        try stdout.flush();
+    }
 }
 
 pub fn generateAssembly(writer: *std.Io.Writer) !void {
