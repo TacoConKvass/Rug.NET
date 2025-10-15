@@ -31,10 +31,6 @@ pub fn main() !void {
     const arg_list = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, arg_list);
 
-    var args = std.process.args();
-    _ = args.next();
-    _ = args.next();
-
     const path = arg_list[0];
     const command_text = if (arg_list.len >= 2) arg_list[1] else "help";
     const command = std.meta.stringToEnum(Command, command_text) orelse .help;
@@ -89,7 +85,6 @@ pub fn main() !void {
         .command_text = command_text,
         .command = command,
         .stdout = stdout,
-        .args = &args,
         .cmd_args = cmd_args,
     };
 
@@ -131,7 +126,6 @@ const Cmd = struct {
     command_text: [:0]const u8,
     command: Command,
     stdout: *std.Io.Writer,
-    args: *std.process.ArgIterator,
     cmd_args: CmdArgs,
 
     pub fn build(self: *@This(), alloc: std.mem.Allocator) !void {
