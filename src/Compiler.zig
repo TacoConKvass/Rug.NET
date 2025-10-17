@@ -2,6 +2,7 @@ const std = @import("std");
 const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const Parser = @import("Parser.zig");
+const NewParser = @import("NewParser.zig");
 const main = @import("main.zig");
 
 pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.BuildFlags) !void {
@@ -23,11 +24,24 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    var state = try Parser.execute(read_data, alloc);
+    if (args.get(.@"new-parser") == null) {
+        var state = try Parser.execute(read_data, alloc);
+        defer state.deinit();
+
+        // Output AST
+        if (args.get(.@"show-ast") != null) {
+            try state.write(stdout, alloc);
+            try stdout.flush();
+        }
+
+        return;
+    }
+
+    var state = try NewParser.execute(read_data, alloc);
     defer state.deinit();
 
     // Output AST
-    if (args.get(.show_ast) != null) {
+    if (args.get(.@"show-ast") != null) {
         try state.write(stdout, alloc);
         try stdout.flush();
     }
