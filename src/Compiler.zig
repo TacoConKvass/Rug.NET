@@ -37,7 +37,7 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
         return;
     }
 
-    var state = try NewParser.execute(read_data, alloc);
+    var state = try NewParser.execute(read_data, alloc, null);
     defer state.deinit();
 
     // Output AST

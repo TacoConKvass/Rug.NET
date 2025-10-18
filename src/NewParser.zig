@@ -1,7 +1,7 @@
 const std = @import("std");
 const Stack = @import("Stack.zig").Define;
 
-pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
+pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !State {
     var index: u64 = 0;
     var line_number: u64 = 1;
     var token_start: u64 = 0;
@@ -9,8 +9,9 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
 
     const mode: Mode = .start;
 
-    var state = State {
+    var state = previous_state orelse State{
         .ast = .init(alloc, 2),
+        .parent = .init(alloc, 2),
         .printed = &.{},
         .allocator = alloc,
     };
@@ -32,7 +33,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
                 'a'...'z', 'A'...'Z', '_' => continue :tokenizer .identifier,
                 ' ' => continue :tokenizer .start,
                 ';' => {
-                    _ = try state.ast.push(Token{ 
+                    _ = try state.push(Token{
                         .tag = .semicolon,
                         .value = &.{},
                         .children = .init(alloc, 0),
@@ -43,12 +44,12 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
                 },
                 '"' => continue :tokenizer .string,
                 '+', '-', '*', '/', '=', '!', '<', '>', '%' => continue :tokenizer .operator,
-                '(', ')', '{', '}' , '[', ']' => continue :tokenizer .paren,
+                '(', ')', '{', '}', '[', ']' => continue :tokenizer .paren,
                 '|' => continue :tokenizer .pipe,
                 '&' => continue :tokenizer .ampersand,
                 '.' => continue :tokenizer .dot,
                 ',' => {
-                    _ = try state.ast.push(Token{ 
+                    _ = try state.push(Token{
                         .tag = .comma,
                         .value = &.{},
                         .children = .init(alloc, 0),
@@ -62,9 +63,9 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
         },
         .int => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
+                _ = try state.push(Token{
                     .tag = .literal_int,
-                    .value = buffer[token_start..index - 1],
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
@@ -78,9 +79,9 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
                 '0'...'9' => continue :tokenizer .int,
                 '.' => continue :tokenizer .float,
                 else => {
-                    _ = try state.ast.push(Token{
+                    _ = try state.push(Token{
                         .tag = .literal_int,
-                        .value = buffer[token_start..index - 1],
+                        .value = buffer[token_start .. index - 1],
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
@@ -91,16 +92,16 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
         },
         .float => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
+                _ = try state.push(Token{
                     .tag = .literal_float,
-                    .value = buffer[token_start..index - 1],
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
                 });
                 break :tokenizer;
             }
-            
+
             const char = buffer[index];
             index += 1;
 
@@ -113,89 +114,89 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
                 },
                 '0'...'9' => continue :tokenizer .float,
                 else => {
-                    _ = try state.ast.push(Token{
+                    _ = try state.push(Token{
                         .tag = .literal_float,
-                        .value = buffer[token_start..index - 1],
+                        .value = buffer[token_start .. index - 1],
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
                     continue :tokenizer .start;
-                }
+                },
             }
         },
         .range => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
+                _ = try state.push(Token{
                     .tag = .literal_range,
-                    .value = buffer[token_start..index - 1],
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
                 });
                 break :tokenizer;
             }
-            
+
             const char = buffer[index];
             index += 1;
 
             switch (char) {
                 '0'...'9' => continue :tokenizer .range,
                 else => {
-                    _ = try state.ast.push(Token{
+                    _ = try state.push(Token{
                         .tag = .literal_range,
-                        .value = buffer[token_start..index - 1],
+                        .value = buffer[token_start .. index - 1],
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
                     index -= 1;
                     continue :tokenizer .start;
-                }
+                },
             }
         },
         .identifier => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
-                    .tag = Token.keywords.get(buffer[token_start..index - 1]) orelse .identifier,
-                    .value = buffer[token_start..index - 1],
+                _ = try state.push(Token{
+                    .tag = Token.keywords.get(buffer[token_start .. index - 1]) orelse .identifier,
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
                 });
                 break :tokenizer;
             }
-            
+
             const char = buffer[index];
             index += 1;
-            
+
             switch (char) {
                 'a'...'z', 'A'...'Z', '0'...'9', '_' => continue :tokenizer .identifier,
                 else => {
-                    _ = try state.ast.push(Token{
-                        .tag = Token.keywords.get(buffer[token_start..index - 1]) orelse .identifier,
-                        .value = buffer[token_start..index - 1],
+                    _ = try state.push(Token{
+                        .tag = Token.keywords.get(buffer[token_start .. index - 1]) orelse .identifier,
+                        .value = buffer[token_start .. index - 1],
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
                     index -= 1;
                     continue :tokenizer .start;
-                }
+                },
             }
         },
         .string => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
+                _ = try state.push(Token{
                     .tag = .literal_str,
-                    .value = buffer[token_start..index - 1],
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
                 });
                 break :tokenizer;
             }
-            
+
             const char = buffer[index];
             index += 1;
 
@@ -203,7 +204,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
                 '"' => {
                     if (buffer[index - 2] == '\\') continue :tokenizer .string;
 
-                    _ = try state.ast.push(Token{
+                    _ = try state.push(Token{
                         .tag = .literal_str,
                         .value = buffer[token_start..index],
                         .children = .init(alloc, 1),
@@ -217,38 +218,38 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
         },
         .operator => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
-                    .tag = Token.operators.get(buffer[token_start..index - 1]) orelse .operator_unknown,
-                    .value = buffer[token_start..index - 1],
+                _ = try state.push(Token{
+                    .tag = Token.operators.get(buffer[token_start .. index - 1]) orelse .operator_unknown,
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
                 });
                 break :tokenizer;
             }
-            
+
             const char = buffer[index];
             index += 1;
 
             switch (char) {
                 '+', '-', '*', '/', '=', '!', '<', '>', '|', '%', '&' => continue :tokenizer .operator,
                 else => {
-                    _ = try state.ast.push(Token{
-                        .tag = Token.operators.get(buffer[token_start..index - 1]) orelse .operator_unknown,
-                        .value = buffer[token_start..index - 1],
+                    _ = try state.push(Token{
+                        .tag = Token.operators.get(buffer[token_start .. index - 1]) orelse .operator_unknown,
+                        .value = buffer[token_start .. index - 1],
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
                     continue :tokenizer .start;
-                }
+                },
             }
         },
         .ampersand => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
-                    .tag = Token.operators.get(buffer[token_start..index - 1]) orelse .operator_unknown,
-                    .value = buffer[token_start..index - 1],
+                _ = try state.push(Token{
+                    .tag = Token.operators.get(buffer[token_start .. index - 1]) orelse .operator_unknown,
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
@@ -261,7 +262,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
 
             switch (char) {
                 'a'...'z', 'A'...'Z', '_' => {
-                    _ = try state.ast.push(Token{ 
+                    _ = try state.push(Token{
                         .tag = .pointer_ref,
                         .value = &.{},
                         .children = .init(alloc, 1),
@@ -276,9 +277,9 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
         },
         .pipe => {
             if (index >= buffer.len) {
-                _ = try state.ast.push(Token{
-                    .tag = Token.operators.get(buffer[token_start..index - 1]) orelse .operator_unknown,
-                    .value = buffer[token_start..index - 1],
+                _ = try state.push(Token{
+                    .tag = Token.operators.get(buffer[token_start .. index - 1]) orelse .operator_unknown,
+                    .value = buffer[token_start .. index - 1],
                     .children = .init(alloc, 1),
                     .line_number = line_number,
                     .start_char = token_start - line_start_char,
@@ -290,7 +291,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
 
             switch (char) {
                 'a'...'z', 'A'...'Z', '_' => {
-                    _ = try state.ast.push(Token{ 
+                    _ = try state.push(Token{
                         .tag = .capture,
                         .value = &.{},
                         .children = .init(alloc, 1),
@@ -306,7 +307,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator) !State {
             }
         },
         .paren => {
-            _ = try state.ast.push(Token{
+            _ = try state.push(Token{
                 .tag = Token.parentheses.get(buffer[token_start..index]) orelse .operator_unknown,
                 .value = buffer[token_start..index],
                 .children = .init(alloc, 1),
@@ -396,8 +397,9 @@ pub const Token = struct {
         type_hint,
         semicolon,
         drop_value,
+        any,
     };
-    
+
     pub const keywords = std.StaticStringMap(Type).initComptime(.{
         .{ "const", .declaration_const },
         .{ "var", .declaration_var },
@@ -435,21 +437,43 @@ pub const Token = struct {
         .{ "[", .index_open },
         .{ "]", .index_close },
     });
+
+    pub fn print(this: *const @This(), alloc: std.mem.Allocator) ![]u8 {
+        if (std.mem.eql(u8, this.value, "")) {
+            return try std.fmt.allocPrint(alloc, ".{{ .tag = {any}, .child = {any}}}", .{
+                this.tag,
+                this.children.buffer[0..this.children.count],
+            });
+        }
+        return try std.fmt.allocPrint(alloc, ".{{ .tag = {any}, .value = {s}, .child = {any}}}", .{
+            this.tag,
+            this.value,
+            this.children.buffer[0..this.children.count],
+        });
+    }
 };
 
 pub const State = struct {
     ast: Stack(Token),
+    parent: Stack(u64),
     printed: []bool,
     allocator: std.mem.Allocator,
 
-    pub const Error = std.mem.Allocator.Error || std.Io.Writer.Error;
+    pub const PrintError = std.mem.Allocator.Error || std.Io.Writer.Error;
+    pub const PushError = Stack(Token).Error || std.mem.Allocator.Error;
 
     pub fn deinit(this: *@This()) void {
         this.ast.deinit();
         this.allocator.free(this.printed);
     }
 
-    pub fn write(this: *@This(), writer: *std.Io.Writer, alloc: std.mem.Allocator) Error!void {
+    pub fn push(this: *@This(), token: Token) PushError!u64 {
+        const token_index = try this.ast.push(token);
+
+        return token_index;
+    }
+
+    pub fn write(this: *@This(), writer: *std.Io.Writer, alloc: std.mem.Allocator) PrintError!void {
         this.printed = try this.allocator.alloc(bool, this.ast.count + 1);
         defer this.allocator.free(this.printed);
 
@@ -464,23 +488,19 @@ pub const State = struct {
 
         for (0..level) |_|
             _ = try writer.write(&.{' '});
-        
+
         if (token.children.count == 0) {
-            try writer.print("|- Token {any}: .{{ {any}, {s}, .child = {any} }}\n", .{
+            try writer.print("|- Token {any}: {s}\n", .{
                 token_index,
-                token.tag,
-                token.value,
-                &.{},
+                try token.print(alloc),
             });
             this.printed[token_index] = true;
             return;
         }
 
-        try writer.print("|- Token {any}: .{{ {any}, {s}, .child = {any} }}\n", .{
+        try writer.print("|- Token {any}: {s}\n", .{
             token_index,
-            token.tag,
-            token.value,
-            token.children.buffer[0..token.children.count],
+            try token.print(alloc),
         });
         this.printed[token_index] = true;
 
@@ -488,4 +508,3 @@ pub const State = struct {
             try this.printToken(writer, token.children.buffer[i].?, level + 1, alloc);
     }
 };
-

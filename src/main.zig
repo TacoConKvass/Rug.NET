@@ -17,10 +17,10 @@ pub fn main() !void {
         .ReleaseFast, .ReleaseSmall => {
             gpa = std.heap.smp_allocator;
             debug = false;
-        }
+        },
     }
     defer if (debug) {
-        std.debug.print("\n{any}", .{ debug_alloc.deinit() });
+        std.debug.print("\n{any}", .{debug_alloc.deinit()});
     };
 
     var arena = std.heap.ArenaAllocator.init(gpa);
@@ -57,7 +57,7 @@ pub fn main() !void {
                             break :retireved arg.len;
                         };
                         const key = std.meta.stringToEnum(BuildArgs, arg[index..eql_inndex]) orelse .invalid;
-                    std.debug.print("{s} {any}\n", .{arg[index..eql_inndex], key});
+                        std.debug.print("{s} {any}\n", .{ arg[index..eql_inndex], key });
                         try build_args.put(key, arg[eql_inndex..]);
                         if (key == .invalid) break;
 

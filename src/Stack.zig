@@ -7,7 +7,7 @@ pub fn Define(comptime T: type) type {
         buffer: []?T,
         count: u64,
 
-        const Error = error{NoElement};
+        pub const Error = error{NoElement};
 
         pub fn init(alloc: std.mem.Allocator, count: u64) @This() {
             return @This(){
