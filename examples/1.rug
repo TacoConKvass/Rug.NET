@@ -2,12 +2,16 @@ const sys = @import("System");
 
 const A = struct {
     integer_field: u32,
+    integer_field2: u32,
 };
 
 const main = fn() void {
     sys.Console.WriteLine("I have been called from Rug");
-    if (a == b) {}
+    if (a == b) {
+        sys.Console.WriteLine("a == b");
+    }
 
-    while (true) {}
-    for (0..10) |i| {}
+    while (true) { }
+
+    for (0..10) |i| { }
 };

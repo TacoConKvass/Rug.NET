@@ -16,6 +16,8 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
         .allocator = alloc,
     };
 
+    var capture_performed = false;
+
     tokenizer: switch (mode) {
         .start => {
             if (index >= buffer.len) break :tokenizer;
@@ -30,7 +32,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
                     line_start_char = index;
                     continue :tokenizer .start;
                 },
-                'a'...'z', 'A'...'Z', '_' => continue :tokenizer .identifier,
+                'a'...'z', 'A'...'Z', '_', '@' => continue :tokenizer .identifier,
                 ' ' => continue :tokenizer .start,
                 ';' => {
                     _ = try state.push(Token{
@@ -47,7 +49,26 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
                 '(', ')', '{', '}', '[', ']' => continue :tokenizer .paren,
                 '|' => continue :tokenizer .pipe,
                 '&' => continue :tokenizer .ampersand,
-                '.' => continue :tokenizer .dot,
+                ':' => {
+                    _ = try state.push(Token{
+                        .tag = .type_hint,
+                        .value = &.{},
+                        .children = .init(alloc, 1),
+                        .line_number = line_number,
+                        .start_char = token_start - line_start_char,
+                    });
+                    continue :tokenizer .start;
+                },
+                '.' => {
+                    _ = try state.push(Token{
+                        .tag = .dot,
+                        .value = &.{},
+                        .children = .init(alloc, 1),
+                        .line_number = line_number,
+                        .start_char = token_start - line_start_char,
+                    });
+                    continue :tokenizer .start;
+                },
                 ',' => {
                     _ = try state.push(Token{
                         .tag = .comma,
@@ -289,19 +310,35 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
 
             const char = buffer[index];
 
-            switch (char) {
+            capture: switch (char) {
                 'a'...'z', 'A'...'Z', '_' => {
                     _ = try state.push(Token{
-                        .tag = .capture,
+                        .tag = .capture_open,
                         .value = &.{},
                         .children = .init(alloc, 1),
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
 
+                    capture_performed = !capture_performed;
+
+                    continue :tokenizer .start;
+                },
+                '|' => {
+                    _ = try state.push(Token{
+                        .tag = .capture_close,
+                        .value = &.{},
+                        .children = .init(alloc, 1),
+                        .line_number = line_number,
+                        .start_char = token_start - line_start_char,
+                    });
+
+                    capture_performed = !capture_performed;
+
                     continue :tokenizer .start;
                 },
                 else => {
+                    if (capture_performed) continue :capture '|';
                     continue :tokenizer .operator;
                 },
             }
@@ -392,12 +429,13 @@ pub const Token = struct {
         keyword_or,
         pointer_ref,
         pointer_deref,
-        capture,
+        capture_open,
+        capture_close,
         comma,
         type_hint,
         semicolon,
         drop_value,
-        any,
+        dot,
     };
 
     pub const keywords = std.StaticStringMap(Type).initComptime(.{
@@ -438,6 +476,11 @@ pub const Token = struct {
         .{ "]", .index_close },
     });
 
+    const Record = struct {
+        index: u64,
+        tag: Type,
+    };
+
     pub fn print(this: *const @This(), alloc: std.mem.Allocator) ![]u8 {
         if (std.mem.eql(u8, this.value, "")) {
             return try std.fmt.allocPrint(alloc, ".{{ .tag = {any}, .child = {any}}}", .{
@@ -455,7 +498,7 @@ pub const Token = struct {
 
 pub const State = struct {
     ast: Stack(Token),
-    parent: Stack(u64),
+    parent: Stack(Token.Record),
     printed: []bool,
     allocator: std.mem.Allocator,
 
@@ -469,6 +512,309 @@ pub const State = struct {
 
     pub fn push(this: *@This(), token: Token) PushError!u64 {
         const token_index = try this.ast.push(token);
+
+        var parent_record: ?Token.Record = this.parent.pop() catch null;
+
+        const parent_index = if (parent_record == null) null else retrieved: switch (parent_record.?.tag) {
+            .declaration_const, .declaration_var => {
+                switch (token.tag) {
+                    .identifier,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .identifier => {
+                switch (token.tag) {
+                    .operator_assign,
+                    .operator_eql,
+                    .paren_open,
+                    .type_hint,
+                    .comma,
+                    .dot,
+                    .capture_close,
+                    => break :retrieved parent_record.?.index,
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .paren_open => {
+                switch (token.tag) {
+                    .declaration_const,
+                    .declaration_var,
+                    .identifier,
+                    .block_open,
+                    .block_close,
+                    .literal_char,
+                    .literal_float,
+                    .literal_int,
+                    .literal_range,
+                    .literal_str,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    .paren_close => break :retrieved parent_record.?.index,
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .paren_close => {
+                switch (token.tag) {
+                    .semicolon,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    .block_open,
+                    .capture_open,
+                    => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .block_open => {
+                switch (token.tag) {
+                    .declaration_const,
+                    .declaration_var,
+                    .identifier,
+                    .semicolon,
+                    .keyword_if,
+                    .keyword_while,
+                    .keyword_for,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    .block_close,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .block_close => {
+                switch (token.tag) {
+                    .semicolon,
+                    => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        break :retrieved parent_record.?.index;
+                    },
+                    .keyword_while,
+                    .keyword_for,
+                    => {
+                        parent_record = this.parent.peek() catch break :retrieved null;
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .literal_str,
+            .literal_range,
+            .literal_int,
+            .literal_float,
+            .literal_char,
+            => {
+                parent_record = this.parent.pop() catch break :retrieved null;
+                break :retrieved parent_record.?.index;
+            },
+            .keyword_struct => {
+                switch (token.tag) {
+                    .block_open,
+                    .block_close,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .keyword_fn => {
+                switch (token.tag) {
+                    .paren_open,
+                    .paren_close,
+                    .identifier,
+                    .block_open,
+                    => {
+                        if (token.tag != .block_open) _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .keyword_if => {
+                switch (token.tag) {
+                    .block_open,
+                    .paren_open,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .keyword_for => {
+                switch (token.tag) {
+                    .block_open,
+                    .paren_open,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .keyword_while => {
+                switch (token.tag) {
+                    .block_open,
+                    .paren_open,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .type_hint => {
+                switch (token.tag) {
+                    .identifier,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .capture_close, .capture_open => {
+                switch (token.tag) {
+                    .identifier,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .comma => {
+                switch (token.tag) {
+                    .block_close,
+                    => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .dot => {
+                switch (token.tag) {
+                    .identifier,
+                    => {
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .semicolon => {
+                switch (token.tag) {
+                    .block_close,
+                    => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        break :retrieved parent_record.?.index;
+                    },
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .operator_assign => {
+                switch (token.tag) {
+                    .identifier,
+                    .literal_char,
+                    .literal_float,
+                    .literal_int,
+                    .literal_range,
+                    .literal_str,
+                    .keyword_fn,
+                    .keyword_struct,
+                    => break :retrieved parent_record.?.index,
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            .operator_eql => {
+                switch (token.tag) {
+                    .identifier,
+                    .literal_char,
+                    .literal_float,
+                    .literal_int,
+                    .literal_str,
+                    => break :retrieved parent_record.?.index,
+                    else => {
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
+                    },
+                }
+            },
+            else => {
+                parent_record = this.parent.pop() catch break :retrieved null;
+                continue :retrieved parent_record.?.tag;
+            },
+        };
+
+        _ = try this.parent.push(Token.Record{
+            .index = token_index,
+            .tag = token.tag,
+        });
+
+        if (parent_index != null) {
+            _ = try this.ast.buffer[parent_index.?].?.children.push(token_index);
+        }
 
         return token_index;
     }
