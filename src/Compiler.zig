@@ -24,7 +24,7 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    if (args.get(.@"new-parser") == null) {
+    if (args.get(.@"old-parser") != null) {
         var state = try Parser.execute(read_data, alloc);
         defer state.deinit();
 

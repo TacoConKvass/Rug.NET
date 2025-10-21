@@ -115,7 +115,7 @@ const CmdArgs = struct {
 
 pub const BuildArgs = enum {
     @"show-ast",
-    @"new-parser",
+    @"old-parser",
     source_file,
     invalid,
 };
