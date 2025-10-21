@@ -519,6 +519,7 @@ pub const State = struct {
             .declaration_const, .declaration_var => {
                 switch (token.tag) {
                     .identifier,
+                    .semicolon,
                     => {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
@@ -531,13 +532,39 @@ pub const State = struct {
             },
             .identifier => {
                 switch (token.tag) {
-                    .operator_assign,
-                    .operator_eql,
                     .paren_open,
-                    .type_hint,
-                    .comma,
+                    //.semicolon,
+                    => {
+                        _ = try this.parent.push(parent_record.?);
+                        break :retrieved parent_record.?.index;
+                    },
+                    .operator_add,
+                    .operator_add_assign,
+                    .operator_sub,
+                    .operator_sub_assign,
+                    .operator_mult,
+                    .operator_mult_assign,
+                    .operator_div,
+                    .operator_div_assign,
+                    .operator_mod,
+                    .operator_mod_assign,
+                    .operator_eql,
+                    .operator_not_eql,
+                    .operator_assign,
+                    .operator_gt,
+                    .operator_gt_eql,
+                    .operator_ls,
+                    .operator_ls_eql,
+                    .operator_shift_l,
+                    .operator_shift_r,
+                    .operator_bit_and,
+                    .operator_bit_or,
+                    .operator_negate,
+                    .operator_unknown,
                     .dot,
-                    .capture_close,
+                    .comma,
+                    .semicolon,
+                    .type_hint,
                     => break :retrieved parent_record.?.index,
                     else => {
                         parent_record = this.parent.pop() catch break :retrieved null;
@@ -547,37 +574,16 @@ pub const State = struct {
             },
             .paren_open => {
                 switch (token.tag) {
-                    .declaration_const,
-                    .declaration_var,
-                    .identifier,
-                    .block_open,
-                    .block_close,
-                    .literal_char,
-                    .literal_float,
-                    .literal_int,
-                    .literal_range,
+                    .paren_close, 
+                    => break :retrieved parent_record.?.index,
                     .literal_str,
+                    .literal_char,
+                    .literal_int,
+                    .literal_float,
+                    .literal_range,
+                    .identifier,
                     => {
                         _ = try this.parent.push(parent_record.?);
-                        break :retrieved parent_record.?.index;
-                    },
-                    .paren_close => break :retrieved parent_record.?.index,
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .paren_close => {
-                switch (token.tag) {
-                    .semicolon,
-                    => {
-                        break :retrieved parent_record.?.index;
-                    },
-                    .block_open,
-                    .capture_open,
-                    => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
                         break :retrieved parent_record.?.index;
                     },
                     else => {
@@ -588,38 +594,33 @@ pub const State = struct {
             },
             .block_open => {
                 switch (token.tag) {
+                    .keyword_if,
+                    .keyword_for,
+                    .keyword_while,
                     .declaration_const,
                     .declaration_var,
                     .identifier,
-                    .semicolon,
-                    .keyword_if,
-                    .keyword_while,
-                    .keyword_for,
                     => {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
                     },
-                    .block_close,
-                    => {
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .block_close => {
-                switch (token.tag) {
                     .semicolon,
-                    => {
+                    .block_close,
+                    => break :retrieved parent_record.?.index,
+                    else => {
                         parent_record = this.parent.pop() catch break :retrieved null;
-                        break :retrieved parent_record.?.index;
+                        continue :retrieved parent_record.?.tag;
                     },
-                    .keyword_while,
-                    .keyword_for,
+                }
+            }, 
+            //.block_close => {},
+            .capture_open => {
+                switch (token.tag) {
+                    .capture_close, 
+                    => break :retrieved parent_record.?.index,
+                    .identifier,
                     => {
-                        parent_record = this.parent.peek() catch break :retrieved null;
+                        _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
                     },
                     else => {
@@ -627,23 +628,11 @@ pub const State = struct {
                         continue :retrieved parent_record.?.tag;
                     },
                 }
-            },
-            .literal_str,
-            .literal_range,
-            .literal_int,
-            .literal_float,
-            .literal_char,
-            => {
-                parent_record = this.parent.pop() catch break :retrieved null;
-                break :retrieved parent_record.?.index;
             },
             .keyword_struct => {
                 switch (token.tag) {
                     .block_open,
-                    .block_close,
-                    => {
-                        break :retrieved parent_record.?.index;
-                    },
+                    => break :retrieved parent_record.?.index,
                     else => {
                         parent_record = this.parent.pop() catch break :retrieved null;
                         continue :retrieved parent_record.?.tag;
@@ -653,23 +642,23 @@ pub const State = struct {
             .keyword_fn => {
                 switch (token.tag) {
                     .paren_open,
-                    .paren_close,
                     .identifier,
                     .block_open,
                     => {
-                        if (token.tag != .block_open) _ = try this.parent.push(parent_record.?);
+                        _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
                     },
+                    // => break :retrieved parent_record.?.index,
                     else => {
                         parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
+                        break :retrieved parent_record.?.index;
                     },
                 }
             },
             .keyword_if => {
                 switch (token.tag) {
-                    .block_open,
                     .paren_open,
+                    .block_open,
                     => {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
@@ -680,50 +669,14 @@ pub const State = struct {
                     },
                 }
             },
-            .keyword_for => {
-                switch (token.tag) {
-                    .block_open,
-                    .paren_open,
-                    => {
-                        _ = try this.parent.push(parent_record.?);
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
+            .keyword_for,
             .keyword_while => {
                 switch (token.tag) {
-                    .block_open,
                     .paren_open,
+                    .capture_open,
+                    .block_open,
                     => {
                         _ = try this.parent.push(parent_record.?);
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .type_hint => {
-                switch (token.tag) {
-                    .identifier,
-                    => {
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .capture_close, .capture_open => {
-                switch (token.tag) {
-                    .identifier,
-                    => {
                         break :retrieved parent_record.?.index;
                     },
                     else => {
@@ -733,74 +686,35 @@ pub const State = struct {
                 }
             },
             .comma => {
-                switch (token.tag) {
-                    .block_close,
-                    => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
+                parent_record = this.parent.peek() catch break :retrieved null;
+                break :retrieved parent_record.?.index;
             },
-            .dot => {
-                switch (token.tag) {
-                    .identifier,
-                    => {
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .semicolon => {
-                switch (token.tag) {
-                    .block_close,
-                    => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        break :retrieved parent_record.?.index;
-                    },
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .operator_assign => {
-                switch (token.tag) {
-                    .identifier,
-                    .literal_char,
-                    .literal_float,
-                    .literal_int,
-                    .literal_range,
-                    .literal_str,
-                    .keyword_fn,
-                    .keyword_struct,
-                    => break :retrieved parent_record.?.index,
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
-            .operator_eql => {
-                switch (token.tag) {
-                    .identifier,
-                    .literal_char,
-                    .literal_float,
-                    .literal_int,
-                    .literal_str,
-                    => break :retrieved parent_record.?.index,
-                    else => {
-                        parent_record = this.parent.pop() catch break :retrieved null;
-                        continue :retrieved parent_record.?.tag;
-                    },
-                }
-            },
+            .operator_add,
+            .operator_add_assign,
+            .operator_sub,
+            .operator_sub_assign,
+            .operator_mult,
+            .operator_mult_assign,
+            .operator_div,
+            .operator_div_assign,
+            .operator_mod,
+            .operator_mod_assign,
+            .operator_eql,
+            .operator_not_eql,
+            .operator_assign,
+            .operator_gt,
+            .operator_gt_eql,
+            .operator_ls,
+            .operator_ls_eql,
+            .operator_shift_l,
+            .operator_shift_r,
+            .operator_bit_and,
+            .operator_bit_or,
+            .operator_negate,
+            .operator_unknown,
+            .dot,
+            .type_hint,
+            => break :retrieved parent_record.?.index,
             else => {
                 parent_record = this.parent.pop() catch break :retrieved null;
                 continue :retrieved parent_record.?.tag;
