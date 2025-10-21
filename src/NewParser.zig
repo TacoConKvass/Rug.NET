@@ -531,12 +531,22 @@ pub const State = struct {
                 }
             },
             .identifier => {
+                const id_parent = this.parent.peek() catch null;
+                const is_being_declared = if (id_parent == null) false else (id_parent.?.tag == .declaration_const or id_parent.?.tag == .declaration_var);
                 switch (token.tag) {
                     .paren_open,
-                    //.semicolon,
                     => {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
+                    },
+                    .semicolon => {
+                        if (!is_being_declared) {
+                            _ = try this.parent.push(parent_record.?);
+                            break :retrieved parent_record.?.index;
+                        }
+
+                        parent_record = this.parent.pop() catch break :retrieved null;
+                        continue :retrieved parent_record.?.tag;
                     },
                     .operator_add,
                     .operator_add_assign,
@@ -563,7 +573,6 @@ pub const State = struct {
                     .operator_unknown,
                     .dot,
                     .comma,
-                    .semicolon,
                     .type_hint,
                     => break :retrieved parent_record.?.index,
                     else => {
@@ -574,7 +583,7 @@ pub const State = struct {
             },
             .paren_open => {
                 switch (token.tag) {
-                    .paren_close, 
+                    .paren_close,
                     => break :retrieved parent_record.?.index,
                     .literal_str,
                     .literal_char,
@@ -604,7 +613,6 @@ pub const State = struct {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
                     },
-                    .semicolon,
                     .block_close,
                     => break :retrieved parent_record.?.index,
                     else => {
@@ -612,11 +620,11 @@ pub const State = struct {
                         continue :retrieved parent_record.?.tag;
                     },
                 }
-            }, 
+            },
             //.block_close => {},
             .capture_open => {
                 switch (token.tag) {
-                    .capture_close, 
+                    .capture_close,
                     => break :retrieved parent_record.?.index,
                     .identifier,
                     => {
@@ -648,7 +656,6 @@ pub const State = struct {
                         _ = try this.parent.push(parent_record.?);
                         break :retrieved parent_record.?.index;
                     },
-                    // => break :retrieved parent_record.?.index,
                     else => {
                         parent_record = this.parent.pop() catch break :retrieved null;
                         break :retrieved parent_record.?.index;
@@ -669,8 +676,7 @@ pub const State = struct {
                     },
                 }
             },
-            .keyword_for,
-            .keyword_while => {
+            .keyword_for, .keyword_while => {
                 switch (token.tag) {
                     .paren_open,
                     .capture_open,
