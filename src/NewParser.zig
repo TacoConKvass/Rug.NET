@@ -107,6 +107,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
+                    index -= 1;
                     continue :tokenizer .start;
                 },
             }
@@ -142,6 +143,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
                         .line_number = line_number,
                         .start_char = token_start - line_start_char,
                     });
+                    index -= 1;
                     continue :tokenizer .start;
                 },
             }
