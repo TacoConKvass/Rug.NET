@@ -1,9 +1,8 @@
 const std = @import("std");
 const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
-const Parser = @import("Parser.zig");
-const NewParser = @import("NewParser.zig");
 const main = @import("main.zig");
+const NewParser = @import("NewParser.zig");
 
 pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.BuildFlags) !void {
     const arg_path = args.get(.source_file);
@@ -19,23 +18,10 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     const file_stat = try file.stat();
 
     var file_reader = file.reader(&.{});
-    const read_data = try file_reader.interface.readAlloc(std.heap.page_allocator, file_stat.size);
+    const read_data = try file_reader.interface.readAlloc(alloc, file_stat.size);
 
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
-
-    if (args.get(.@"old-parser") != null) {
-        var state = try Parser.execute(read_data, alloc);
-        defer state.deinit();
-
-        // Output AST
-        if (args.get(.@"show-ast") != null) {
-            try state.write(stdout, alloc);
-            try stdout.flush();
-        }
-
-        return;
-    }
 
     var state = try NewParser.execute(read_data, alloc, null);
     defer state.deinit();
