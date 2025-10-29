@@ -13,9 +13,11 @@ type definition = "struct", "{", [ type body ], "}";
 
 func = [ visibility ], "const", identifier, "=", func definition;
 
-func definition = "fn", "(", [ identifier list ], ")", identifier, "{", [ func body ], "}";
+func definition = "fn", "(", [ parameter list ], ")", identifier, "{", [ func body ], "}";
 
 identifier list = [ { identifer, "," } ], identifier;
+
+parameter list = [ { identifier, type hint, "," } ], identifier, type hint
 
 nestable identifier = [ { identifer, "." } ], identifier;
 
