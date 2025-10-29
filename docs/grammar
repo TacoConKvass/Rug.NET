@@ -1,0 +1,41 @@
+// top level
+type body;
+
+type body = { ( field, "," ) | ( (value | type | func), ";" ) };
+
+field = identifier, type hint, [ "=", value literal ];
+
+value = [ visibility ], mutability, identifier, "=", value literal;
+
+type = [ visibility ], "const", identifier, "=", type definition;
+
+type definition = "struct", "{", [ type body ], "}";
+
+func = [ visibility ], "const", identifier, "=", func definition;
+
+func definition = "fn", "(", [ identifier list ], ")", identifier, "{", [ func body ], "}";
+
+identifier list = [ { identifer, "," } ], identifier;
+
+nested identifier = [ { identifer, "." } ], identifier;
+
+func body = { expresstion }, [ return statement ];
+
+expression = expression target, "=", ( nested identifier | call | value_literal ); 
+
+call = nested identifier, "(", [ identifier list ], ")";
+
+return statement = "return", [ [ nested identifier ] | value literal ], ";"
+
+type hint = ":", identifier;
+
+// values
+value literal = number | string | struct | range | bool | struct init;
+
+range = number, "..", number;
+
+bool = "true" | "false";
+
+struct init = identifier, "{", [ { field init, [ "," ] } ] "}";
+
+field init = ".", identifier, "=", value literal;
