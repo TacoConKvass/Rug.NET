@@ -2,7 +2,7 @@ const std = @import("std");
 const ms_dos = @import("ms_dos.zig");
 const pe = @import("pe.zig");
 const main = @import("main.zig");
-const Parser = @import("Parser.zig");
+const Tokenizer = @import("Tokenizer.zig");
 
 pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.BuildFlags) !void {
     const arg_path = args.get(.source_file);
@@ -23,7 +23,7 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    var state = try Parser.execute(read_data, alloc, null);
+    var state = try Tokenizer.execute(read_data, alloc, null);
     defer state.deinit();
 
     // Output AST

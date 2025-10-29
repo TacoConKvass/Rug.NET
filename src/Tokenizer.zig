@@ -10,7 +10,7 @@ pub fn execute(buffer: []u8, alloc: std.mem.Allocator, previous_state: ?State) !
     const mode: Mode = .start;
 
     var state = previous_state orelse State{
-        .ast = .init(alloc, 2),
+        .tokens = .init(alloc, 2),
         .parent = .init(alloc, 2),
         .printed = &.{},
         .allocator = alloc,
@@ -499,7 +499,7 @@ pub const Token = struct {
 };
 
 pub const State = struct {
-    ast: Stack(Token),
+    tokens: Stack(Token),
     parent: Stack(Token.Record),
     printed: []bool,
     allocator: std.mem.Allocator,
@@ -508,12 +508,12 @@ pub const State = struct {
     pub const PushError = Stack(Token).Error || std.mem.Allocator.Error;
 
     pub fn deinit(this: *@This()) void {
-        this.ast.deinit();
+        this.tokens.deinit();
         this.allocator.free(this.printed);
     }
 
     pub fn push(this: *@This(), token: Token) PushError!u64 {
-        const token_index = try this.ast.push(token);
+        const token_index = try this.tokens.push(token);
 
         var parent_record: ?Token.Record = this.parent.pop() catch null;
 
@@ -735,24 +735,24 @@ pub const State = struct {
         });
 
         if (parent_index != null) {
-            _ = try this.ast.buffer[parent_index.?].?.children.push(token_index);
+            _ = try this.tokens.buffer[parent_index.?].?.children.push(token_index);
         }
 
         return token_index;
     }
 
     pub fn write(this: *@This(), writer: *std.Io.Writer, alloc: std.mem.Allocator) PrintError!void {
-        this.printed = try this.allocator.alloc(bool, this.ast.count + 1);
+        this.printed = try this.allocator.alloc(bool, this.tokens.count + 1);
         defer this.allocator.free(this.printed);
 
-        for (0..this.ast.count) |index| {
+        for (0..this.tokens.count) |index| {
             try this.printToken(writer, index, 0, alloc);
         }
     }
 
     fn printToken(this: *@This(), writer: *std.Io.Writer, token_index: u64, level: u64, alloc: std.mem.Allocator) !void {
         if (this.printed[token_index]) return;
-        const token = this.ast.buffer[token_index].?;
+        const token = this.tokens.buffer[token_index].?;
 
         for (0..level) |_|
             _ = try writer.write(&.{' '});
