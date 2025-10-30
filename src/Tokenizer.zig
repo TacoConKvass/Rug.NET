@@ -429,6 +429,7 @@ pub const Token = struct {
         keyword_break,
         keyword_and,
         keyword_or,
+        visibility_public,
         pointer_ref,
         pointer_deref,
         capture_open,
@@ -450,6 +451,7 @@ pub const Token = struct {
         .{ "if", .keyword_if },
         .{ "and", .keyword_and },
         .{ "or", .keyword_or },
+        .{ "pub", .visibility_public },
     });
 
     pub const operators = std.StaticStringMap(Type).initComptime(.{
