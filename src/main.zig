@@ -1,6 +1,5 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const pe = @import("pe.zig");
 const Compiler = @import("Compiler.zig");
 
 const version = "0.0.1";
