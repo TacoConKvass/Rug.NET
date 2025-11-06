@@ -21,12 +21,12 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     try stdout.print("{s}\n\n", .{read_data});
     try stdout.flush();
 
-    var state = try Tokenizer.execute(read_data, alloc, null);
+    var state = try Tokenizer.execute(alloc, read_data, null);
     defer state.deinit();
 
     // Output AST
     if (args.get(.@"show-ast") != null) {
-        try state.write(stdout, alloc);
+        try state.write(alloc, stdout);
         try stdout.flush();
     }
 }
