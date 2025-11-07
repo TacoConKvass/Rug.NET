@@ -9,7 +9,7 @@ pub fn execute(alloc: std.mem.Allocator, data: []u8, previous_state: ?State) !St
     const mode: Mode = .start;
     var start: u64 = 0;
     var current: u64 = 0;
-    var line_num: u64 = 0;
+    var line_num: u64 = 1;
     tokenizer: switch (mode) {
         .start => {
             current += 1;
@@ -154,9 +154,12 @@ pub const State = struct {
     pub fn write(this: *@This(), alloc: std.mem.Allocator, writer: *std.Io.Writer) !void {
         _ = alloc;
         const count = this.tokens.count;
+        _ = try writer.write("ID\t| Line\t| Tag\t\t| Value\n");
+        try writer.print("{s}\n", .{&[_]u8{'-'} ** 40});
         for (0..count, this.tokens.buffer[0..count]) |i, token| {
-            try writer.print("{any}\t| {any}\t| {s}\n", .{ i, token.tag, token.value });
+            try writer.print("{any}\t| {}\t| {any}\t| {s}\n", .{ i, token.line_number, token.tag, token.value });
         }
+        _ = try writer.write("\n");
     }
 };
 
