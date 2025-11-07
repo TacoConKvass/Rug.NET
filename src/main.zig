@@ -113,8 +113,8 @@ const CmdArgs = struct {
 };
 
 pub const BuildArgs = enum {
+    @"show-tokens",
     @"show-ast",
-    @"old-parser",
     source_file,
     invalid,
 };

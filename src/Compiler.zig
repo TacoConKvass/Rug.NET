@@ -1,6 +1,7 @@
 const std = @import("std");
 const main = @import("main.zig");
 const Tokenizer = @import("Tokenizer.zig");
+const Ast = @import("Ast.zig");
 
 pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.BuildFlags) !void {
     const arg_path = args.get(.source_file);
@@ -24,9 +25,15 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
     var state = try Tokenizer.execute(alloc, read_data, null);
     defer state.deinit();
 
-    // Output AST
-    if (args.get(.@"show-ast") != null) {
+    // Print tokens
+    if (args.get(.@"show-tokens") != null) {
         try state.write(alloc, stdout);
         try stdout.flush();
     }
+
+    const ast = try Ast.from(alloc, state.tokens.buffer[0..state.tokens.count]);
+    for (ast.errors) |err| {
+        _ = try stdout.print("{s}\n", .{err});
+    }
+    try stdout.flush();
 }
