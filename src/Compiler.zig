@@ -31,9 +31,12 @@ pub fn execute(stdout: *std.Io.Writer, alloc: std.mem.Allocator, args: main.Buil
         try stdout.flush();
     }
 
-    const ast = try Ast.from(alloc, state.tokens.buffer[0..state.tokens.count]);
+    var ast = try Ast.from(alloc, state.tokens.buffer[0..state.tokens.count]);
     for (ast.errors) |err| {
         _ = try stdout.print("{s}\n", .{err});
     }
+
+    if (ast.built and args.get(.@"show-ast") != null) try ast.write(stdout);
+
     try stdout.flush();
 }
