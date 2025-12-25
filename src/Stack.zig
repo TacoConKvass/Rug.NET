@@ -4,7 +4,7 @@ const std = @import("std");
 pub fn Define(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
-        buffer: []?T,
+        buffer: []T,
         count: u64,
 
         pub const Error = error{NoElement};
@@ -12,7 +12,7 @@ pub fn Define(comptime T: type) type {
         pub fn init(alloc: std.mem.Allocator, count: u64) @This() {
             return @This(){
                 .allocator = alloc,
-                .buffer = alloc.alloc(?T, count) catch &.{},
+                .buffer = alloc.alloc(T, count) catch &.{},
                 .count = 0,
             };
         }
@@ -35,7 +35,7 @@ pub fn Define(comptime T: type) type {
 
         pub fn peek(this: *@This()) Error!T {
             if (this.count == 0) return error.NoElement;
-            return this.buffer[this.count - 1].?;
+            return this.buffer[this.count - 1];
         }
 
         pub fn pop(this: *@This()) Error!T {
@@ -43,10 +43,9 @@ pub fn Define(comptime T: type) type {
 
             const index = this.count - 1;
             const element = this.buffer[index];
-            this.buffer[index] = null;
             this.count = index;
 
-            return element.?;
+            return element;
         }
     };
 }
