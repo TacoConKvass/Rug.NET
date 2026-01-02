@@ -16,12 +16,13 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(exe);
-    
+
     // Set up `zig build run`
     const run_step = b.step("run", "Run the app");
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
+
     // Accept arguments for `zig build run`
     if (b.args) |args| {
         run_cmd.addArgs(args);
