@@ -1,5 +1,0 @@
-const sys = @namespace("System");
-
-pub const main = fn () void {
-    sys.Console.WriteLine("Hello \"World\" from Rug!");
-};
