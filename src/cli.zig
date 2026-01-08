@@ -391,11 +391,11 @@ fn innerParse(comptime Args: type, allocator: Allocator, iter: anytype, opts: Op
     inline for (named_fields, 0..) |field, i| {
         if (getArrayChild(field.type)) |_| {
             // Array.
-            @field(result.named, field.name) = try @field(named_array_lists, field.name).toOwnedSlice(allocator);
+            @field(result, field.name) = try @field(named_array_lists, field.name).toOwnedSlice(allocator);
         } else if (!named_fields_seen[i]) {
             // Unspecified scalar.
             if (field.defaultValue()) |default| {
-                @field(result.named, field.name) = default;
+                @field(result, field.name) = default;
             } else if (field.type == bool) {
                 return innerParseUsage(Args, opts, "missing required argument: --" ++ field.name ++ " or --no-" ++ field.name, .{});
             } else {
@@ -406,11 +406,11 @@ fn innerParse(comptime Args: type, allocator: Allocator, iter: anytype, opts: Op
     inline for (positional_fields, 0..) |field, i| {
         if (getArrayChild(field.type)) |_| {
             // Array.
-            @field(result.positional, field.name) = try @field(positional_array_lists, field.name).toOwnedSlice(allocator);
+            @field(result, field.name) = try @field(positional_array_lists, field.name).toOwnedSlice(allocator);
         } else if (positional_field_index <= i) {
             // Unspecified Scalar.
             if (field.defaultValue()) |default| {
-                @field(result.positional, field.name) = default;
+                @field(result, field.name) = default;
             } else {
                 return innerParseUsage(Args, opts, "missing required argument: " ++ field.name, .{});
             }
@@ -842,19 +842,22 @@ fn generateHelp(comptime Args: type) []const u8 {
                     0,
         );
     };
-    const col0_width = comptime 2 + width + 3;
+    const col0_width = comptime 2 + width + 5;
 
-    comptime var lines: []const []const u8 = &.{ usageLineFmt(Args), "" };
+    comptime var lines: []const []const u8 = &.{""};
     if (@hasDecl(Args, "description")) {
-        lines = lines ++ &[_][]const u8{ "    " ++ Args.description, "" };
+        lines = lines ++ &[_][]const u8{ "  " ++ Args.description, "" };
     }
 
     if (positional_table.len > 0) {
         lines = lines ++ &[_][]const u8{"Arguments:"};
         comptime for (positional_table) |arg| {
             var line: []const u8 = "  " ++ arg.name;
-            line = line ++ (" " ** (col0_width - line.len));
+            line = line ++ (" " ** (col0_width - line.len)) ++ arg.description;
             lines = lines ++ &[_][]const u8{line};
+            if (arg.default != null) {
+                lines = lines ++ &[_][]const u8{" " ** col0_width ++ "Default: " ++ arg.default.?};
+            }
         };
         lines = lines ++ &[_][]const u8{""};
     }
@@ -862,10 +865,14 @@ fn generateHelp(comptime Args: type) []const u8 {
     if (named_table.len > 0) {
         lines = lines ++ &[_][]const u8{"Options:"};
         comptime for (named_table) |option| {
-            var line: []const u8 = "  " ++ option.name;
+            var line: []const u8 = "  --" ++ option.name;
             if (option.type) |typename| line = line ++ "=" ++ typename;
-            line = line ++ (" " ** (col0_width - line.len));
+            line = line ++ (" " ** (col0_width - line.len)) ++ option.description;
             lines = lines ++ &[_][]const u8{line};
+
+            if (option.default != null) {
+                lines = lines ++ &[_][]const u8{" " ** col0_width ++ "Default: " ++ option.default.?};
+            }
         };
         lines = lines ++ &[_][]const u8{""};
     }
